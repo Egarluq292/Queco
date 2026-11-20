@@ -142,13 +142,14 @@
   .hora .check.visto { color: #7cc4ff; opacity: 1; }
   .msj:not(.mio) .hora .check.visto { color: #2f8fd8; }
   .reac small { font-size: 12px; color: var(--suave); margin-left: 2px; }
-  .hoja .emojis { display: flex; justify-content: space-between; background: var(--panel); border-radius: 14px; padding: 6px 8px; }
-  .hoja .emojis button { font-size: 26px; padding: 6px; border-radius: 50%; width: 46px; height: 46px; line-height: 1; }
+  .hoja .emojis { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--panel); border-radius: 14px; padding: 6px; }
+  .hoja .emojis button { font-size: 25px; padding: 0; border-radius: 50%; width: 100%; aspect-ratio: 1; max-width: 48px; justify-self: center; line-height: 1; }
   .hoja .emojis button.mia { background: var(--borde); }
   .hoja .emojis button.masEmoji { font-size: 24px; color: var(--suave); border: 1px dashed var(--borde); }
   .panelEmoji { padding: 12px; gap: 10px; }
   #emojiEntrada { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo); outline: none; font-size: 16px; text-align: center; }
-  .rejilla { display: grid; grid-template-columns: repeat(8, 1fr); max-height: 34vh; overflow-y: auto; }
+  .rejilla { display: grid; grid-template-columns: repeat(8, 1fr); height: 46vh; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
+  .rejilla h3 { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; padding: 10px 4px 4px; position: sticky; top: 0; background: var(--panel); }
   .hoja .rejilla button { font-size: 25px; padding: 6px 0; border: 0 !important; }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
   .msj.eliminado .hora { color: var(--error); opacity: 1; }
@@ -542,7 +543,7 @@
 <div id="panelEmoji" class="velo oculto">
   <div class="hoja">
     <div class="grupoBotones panelEmoji">
-      <input type="text" id="emojiEntrada" placeholder="Escribe un emoji con el teclado" autocomplete="off" enterkeyhint="done">
+      <input type="text" id="emojiEntrada" placeholder="O escribe uno con el teclado" autocomplete="off" enterkeyhint="done">
       <div class="rejilla" id="emojiRejilla"></div>
     </div>
     <button class="cancelar" id="emojiCancelar">Cancelar</button>
@@ -1714,22 +1715,46 @@ function abrirHoja(opciones, { emojis = null } = {}) {
 function cerrarHoja() { $('#velo').classList.add('oculto'); }
 
 /* Más emojis: la rejilla o cualquiera escrito con el teclado del móvil */
-const MAS_EMOJIS = ['😀','😁','😅','🤣','😊','😍','🥰','😘','😜','🤔','🙄','😴','😎','🤩','🥳','😡',
-  '🤯','😱','🤗','🤫','👏','🙌','💪','👌','✌️','🤞','👀','🔥','✨','🎉','💯','✅',
-  '❌','💔','🌹','☕','🍻','⚽','🎁','🙈'];
+/* Todos los emojis, generados a partir de los bloques de Unicode y agrupados como en el teclado */
+const SECCIONES_EMOJI = [
+  ['Caras', [[0x1F600, 0x1F64F], [0x1F910, 0x1F92F], [0x1F970, 0x1F97F], [0x1F9D0, 0x1F9D0], [0x1FAE0, 0x1FAEF]]],
+  ['Gestos y personas', [[0x1F440, 0x1F4AF], [0x1F930, 0x1F94F], [0x1F9B0, 0x1F9CF], [0x1F9D1, 0x1F9FF], [0x1FAC0, 0x1FACF], [0x1FAF0, 0x1FAFF]]],
+  ['Corazones y símbolos', [[0x2600, 0x27BF], [0x1F4B0, 0x1F4FF], [0x1F500, 0x1F5FF]]],
+  ['Naturaleza y comida', [[0x1F300, 0x1F37F], [0x1F980, 0x1F9AF], [0x1FAB0, 0x1FABF], [0x1FAD0, 0x1FADF]]],
+  ['Actividades y objetos', [[0x1F380, 0x1F43F], [0x1F950, 0x1F96F], [0x1FA70, 0x1FAAF]]],
+  ['Viajes y lugares', [[0x1F680, 0x1F6FF]]],
+  ['Banderas', 'banderas']
+];
+const BANDERAS = ['ES','MX','AR','CO','CL','PE','VE','EC','UY','PY','BO','CU','DO','US','GB','FR','DE','IT','PT','BR','MA','CN','JP','KR','IN','CA','AU','IE','NL','BE','CH','AT','SE','NO','DK','FI','PL','GR','TR','UA','RU','EU','UN']
+  .map(c => String.fromCodePoint(...[...c].map(l => 0x1F1E6 + l.charCodeAt(0) - 65)));
+let listaEmojisCreada = false;
+function crearListaEmojis(r) {
+  const vistos = new Set();
+  for (const [titulo, rangos] of SECCIONES_EMOJI) {
+    const lista = [];
+    if (rangos === 'banderas') lista.push(...BANDERAS);
+    else for (const [a, b] of rangos) for (let c = a; c <= b; c++) {
+      const ch = String.fromCodePoint(c);
+      if (vistos.has(c)) continue;
+      if (/\p{Emoji_Presentation}/u.test(ch)) { lista.push(ch); vistos.add(c); }
+      else if (c < 0x2800 && /\p{Extended_Pictographic}/u.test(ch)) { lista.push(ch + '\uFE0F'); vistos.add(c); }
+    }
+    if (!lista.length) continue;
+    const h3 = document.createElement('h3'); h3.textContent = titulo; r.append(h3);
+    for (const e of lista) { const b = document.createElement('button'); b.textContent = e; b.dataset.e = e; r.append(b); }
+  }
+  r.addEventListener('click', ev => { const e = ev.target.dataset?.e; if (e) elegirEmoji(e); });
+  listaEmojisCreada = true;
+}
 let emojiElegido = null;
 const segmentador = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('es', { granularity: 'grapheme' }) : null;
 function abrirPanelEmoji(elegir) {
   emojiElegido = elegir;
   const r = $('#emojiRejilla');
-  if (!r.childElementCount) for (const e of MAS_EMOJIS) {
-    const b = document.createElement('button'); b.textContent = e;
-    b.onclick = () => elegirEmoji(e);
-    r.append(b);
-  }
-  const inp = $('#emojiEntrada'); inp.value = '';
+  if (!listaEmojisCreada) crearListaEmojis(r);
+  r.scrollTop = 0;
+  $('#emojiEntrada').value = '';
   $('#panelEmoji').classList.remove('oculto');
-  inp.focus(); // abre el teclado: desde ahí se elige cualquier emoji
 }
 function cerrarPanelEmoji() { $('#panelEmoji').classList.add('oculto'); $('#emojiEntrada').blur(); emojiElegido = null; }
 function elegirEmoji(e) { const f = emojiElegido; cerrarPanelEmoji(); if (f) f(e); }
@@ -1874,7 +1899,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.6';
+const VERSION = '3.7';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
