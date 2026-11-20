@@ -574,9 +574,10 @@ if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorag
 /* ---------- Ajustes locales ---------- */
 const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
 const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajustes));
-/* Administrador: quien entra con el nombre «Esteban» */
-const ADMIN = 'esteban';
-const esAdmin = () => !!yo && yo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === ADMIN;
+/* Administrador: el móvil cuyo identificador está en esta lista (se ve en Ajustes, abajo del todo) */
+const ADMIN_DISPOSITIVOS = [];
+const idCorto = () => disp.slice(0, 4) + '-' + disp.slice(4, 8);
+const esAdmin = () => ADMIN_DISPOSITIVOS.includes(idCorto());
 function aplicarApariencia() {
   if (ajustes.tema === 'auto') document.documentElement.removeAttribute('data-tema');
   else document.documentElement.setAttribute('data-tema', ajustes.tema);
@@ -711,7 +712,6 @@ function crearElemento(id, m) {
   const mio = m.d === disp;
   b.className = 'msj' + (mio ? ' mio' : '');
   b.dataset.id = id; b.dataset.ts = m.ts;
-  if (!mio) { const a = document.createElement('div'); a.className = 'autor'; a.textContent = m.n; b.append(a); }
   if (m.r && m.r.i) b.append(crearCita(m.r));
   if (m.k === 'foto') {
     b.classList.add('con-foto');
@@ -1471,7 +1471,7 @@ function modoPantalla() {
   return 'navegador';
 }
 function abrirAjustes() {
-  $('#version').textContent = `Versión ${VERSION} · ${modoPantalla()}`;
+  $('#version').textContent = `Versión ${VERSION} · ${modoPantalla()} · dispositivo ${idCorto()}`;
   $('#grupoAdmin').classList.toggle('oculto', !esAdmin());
   $('#intConservar').checked = !!ajustes.conservar;
   marcarSegmento('#segTema', ajustes.tema);
