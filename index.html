@@ -289,6 +289,10 @@
   #visor .zona { display: grid; place-items: center; padding: 16px; min-height: 0; overflow: hidden; touch-action: none; position: relative; }
   #visor img { max-width: 100%; max-height: 100%; border-radius: 8px; transform-origin: 0 0; will-change: transform; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #visor .camBarra { grid-template-columns: 1fr 1fr; }
+  #visorCuenta {
+    position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    padding: 3px 12px; border-radius: 99px; background: rgba(0,0,0,.5); color: #fff; font-size: 13px; pointer-events: none;
+  }
 
   /* Ajustes */
   #ajustes { position: fixed; inset: 0; z-index: 15; background: var(--fondo); display: grid; grid-template-rows: auto 1fr; }
@@ -556,7 +560,7 @@
 
 <!-- Visor de fotos -->
 <div id="visor" class="oculto">
-  <div class="zona"><img alt=""></div>
+  <div class="zona"><img alt=""><span id="visorCuenta"></span></div>
   <div class="camBarra">
     <button type="button" class="redondo claro" id="visorCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
     <button type="button" class="redondo claro" id="visorGuardar" aria-label="Guardar en el móvil"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM4 19h16v2H4z"/></svg></button>
@@ -1353,17 +1357,39 @@ $('#archivoGaleria').onchange = e => fotoElegida(e.target);
 
 /* Visor */
 let fotoEnVisor = null;
-function abrirVisor(id) {
+let visorId = null;
+/* Fotos de la conversación, de la más antigua a la más reciente */
+const idsFotos = () => [...mensajes].filter(([, r]) => r.m.k === 'foto').map(([id]) => id).sort((a, b) => a - b);
+function abrirVisor(id, desde = 0) {
   const reg = mensajes.get(id);
   if (!reg) return;
   cargarAdjunto(reg.m.a, reg.m.m).then(r => {
     if (!r) return;
-    fotoEnVisor = reg.m;
-    $('#visor img').src = r.url;
+    fotoEnVisor = reg.m; visorId = id;
+    const img = $('#visor img');
+    zoomVisor.reiniciar();
+    img.src = r.url;
+    const ids = idsFotos();
+    $('#visorCuenta').textContent = ids.length > 1 ? `${ids.indexOf(id) + 1} de ${ids.length}` : '';
     $('#visor').classList.remove('oculto');
+    if (desde) { // entra deslizándose desde un lado
+      img.style.transition = 'none'; img.style.transform = `translateX(${desde}px)`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { img.style.transition = 'transform .22s ease-out'; img.style.transform = ''; }));
+    }
   });
 }
-function cerrarVisor() { $('#visor').classList.add('oculto'); $('#visor img').removeAttribute('src'); fotoEnVisor = null; zoomVisor.reiniciar(); }
+/* dir = 1 → siguiente (más reciente); -1 → anterior. Devuelve false si no hay más */
+function pasarFoto(dir) {
+  const ids = idsFotos(), i = ids.indexOf(visorId), j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return false;
+  const ancho = $('#visor .zona').clientWidth;
+  const img = $('#visor img');
+  img.style.transition = 'transform .16s ease-in';
+  img.style.transform = `translateX(${-dir * ancho}px)`;
+  setTimeout(() => abrirVisor(ids[j], dir * ancho * .6), 150);
+  return true;
+}
+function cerrarVisor() { $('#visor').classList.add('oculto'); $('#visor img').removeAttribute('src'); fotoEnVisor = null; visorId = null; zoomVisor.reiniciar(); }
 $('#visorCerrar').onclick = cerrarVisor;
 
 /* Zoom en el visor: pellizcar, arrastrar y doble toque (en el resto de la app no hay zoom) */
@@ -1371,7 +1397,7 @@ const zoomVisor = (() => {
   const zona = $('#visor .zona'), img = $('#visor img');
   let s = 1, tx = 0, ty = 0;
   const dedos = new Map();
-  let previo = null, ultimoToque = { t: 0, x: 0, y: 0 }, movido = false;
+  let previo = null, ultimoToque = { t: 0, x: 0, y: 0 }, movido = false, inicioDeslizar = null, deslizando = 0;
   const aplicar = (animar = false) => {
     img.style.transition = animar ? 'transform .2s' : 'none';
     img.style.transform = s === 1 && !tx && !ty ? '' : `translate(${tx}px, ${ty}px) scale(${s})`;
@@ -1400,6 +1426,8 @@ const zoomVisor = (() => {
     dedos.set(e.pointerId, local(e));
     movido = false;
     previo = dedos.size === 2 ? estado2() : { ...local(e) };
+    inicioDeslizar = dedos.size === 1 && s === 1 ? { ...local(e) } : null;
+    deslizando = 0;
   });
   zona.addEventListener('pointermove', e => {
     if (!dedos.has(e.pointerId)) return;
@@ -1412,7 +1440,14 @@ const zoomVisor = (() => {
       previo = ahora;
     } else if (dedos.size === 1 && s > 1) {
       tx += p.x - previo.x; ty += p.y - previo.y; previo = p;
+    } else if (dedos.size === 1 && inicioDeslizar) {
+      // sin zoom: deslizar para pasar de foto
+      deslizando = p.x - inicioDeslizar.x;
+      img.style.transition = 'none';
+      img.style.transform = `translateX(${deslizando}px)`;
+      return;
     }
+    if (dedos.size === 2) inicioDeslizar = null;
     aplicar();
   });
   const fin = e => {
@@ -1420,6 +1455,12 @@ const zoomVisor = (() => {
     const p = dedos.get(e.pointerId);
     dedos.delete(e.pointerId);
     if (dedos.size === 1) previo = { ...[...dedos.values()][0] };
+    if (!dedos.size && inicioDeslizar && deslizando) {
+      const d = deslizando; inicioDeslizar = null; deslizando = 0;
+      if (Math.abs(d) > 60 && pasarFoto(d < 0 ? 1 : -1)) return;
+      img.style.transition = 'transform .2s'; img.style.transform = ''; // vuelve a su sitio
+      return;
+    }
     if (!dedos.size) {
       if (!movido && e.type === 'pointerup') {
         const ahora = Date.now();
@@ -1764,7 +1805,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.2';
+const VERSION = '3.3';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
