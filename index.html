@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
@@ -39,7 +39,7 @@
   }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; }
-  html { background: var(--fondo); }
+  html { background: var(--fondo); touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   body {
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: var(--fondo); color: var(--texto);
@@ -201,7 +201,7 @@
   textarea {
     flex: 1; resize: none; max-height: 140px; padding: 10px 14px;
     border-radius: 20px; border: 1px solid var(--borde); background: var(--fondo); outline: none;
-    font-size: calc(16px * var(--escala));
+    font-size: max(16px, calc(16px * var(--escala))); /* menos de 16 px hace que el iPhone amplíe al escribir */
     field-sizing: content; min-height: 44px;
   }
   .redondo {
@@ -1574,7 +1574,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.6';
+const VERSION = '2.7';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -1979,6 +1979,16 @@ window.addEventListener('popstate', () => {
   if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
   mostrarPortada();
 });
+
+/* Sin zoom: el iPhone ignora user-scalable=no, así que se bloquea el pellizco a mano */
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+let ultimoToque = 0;
+document.addEventListener('touchend', e => {
+  const ahora = Date.now();
+  if (ahora - ultimoToque < 300 && !e.target.closest('input, textarea, button, label')) e.preventDefault(); // doble toque
+  ultimoToque = ahora;
+}, { passive: false });
 
 /* ---------- Inicio ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
