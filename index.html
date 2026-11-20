@@ -835,6 +835,7 @@ function quitarMensaje(id) {
 }
 
 function aplicarCambio(id, m, datos = null, eliminado = false) {
+  if (ocultos.has(id)) return;
   const antes = mensajes.get(id);
   if (!m) { quitarMensaje(id); return; }
   const el = crearElemento(id, m);
@@ -904,6 +905,17 @@ async function reaccionar(objetivo, emoji) {
     pintarReacciones(objetivo);
     leer();
   } catch { estado('No se pudo reaccionar', true); }
+}
+
+/* «Eliminar para mí»: se oculta solo en este móvil; en el servidor y en el otro móvil sigue */
+const claveOcultos = () => 'susurro.ocultos.' + (sala || '').slice(0, 16);
+let ocultos = new Set();
+const cargarOcultos = () => { try { ocultos = new Set(JSON.parse(localStorage.getItem(claveOcultos()) || '[]')); } catch { ocultos = new Set(); } };
+function ocultarParaMi(id) {
+  ocultos.add(id);
+  localStorage.setItem(claveOcultos(), JSON.stringify([...ocultos]));
+  if (mensajes.get(id)?.eliminado) quitarBorrado(id);
+  quitarMensaje(id); rehacerSeparadores();
 }
 
 function marcarEliminado(el) {
@@ -1704,14 +1716,16 @@ function menuMensaje(id) {
     ops.push({ texto: m.k === 'foto' ? 'Guardar foto en el móvil' : 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
     if (m.k === 'foto' && mio && !reg.eliminado) ops.push({ texto: m.t ? 'Editar comentario' : 'Añadir comentario', accion: () => empezarEdicion(id) });
   }
-  if (reg.eliminado) ops.push({
-    texto: 'Quitar de mi móvil', peligro: true,
-    accion: () => { quitarBorrado(id); quitarMensaje(id); rehacerSeparadores(); }
+  ops.push({
+    texto: 'Eliminar para mí', peligro: true, nota: mio && !reg.eliminado
+      ? 'Desaparecerá solo de tu móvil. Tu colega lo seguirá viendo.'
+      : 'Desaparecerá solo de tu móvil.',
+    accion: () => { if (editandoId === id) terminarEdicion(); ocultarParaMi(id); }
   });
   const miReac = reaccionesDe(id).get(disp);
   if (miReac && !reg.eliminado) ops.push({ texto: 'Quitar mi reacción ' + miReac.e, accion: () => reaccionar(id, null) });
   if (mio && !reg.eliminado) ops.push({
-    texto: 'Eliminar', peligro: true, nota: 'El mensaje se eliminará del servidor.',
+    texto: 'Eliminar para todos', peligro: true, nota: 'El mensaje se eliminará del servidor.',
     accion: async () => {
       try { await borrarMensaje(id); if (editandoId === id) terminarEdicion(); await leer(); }
       catch { estado('No se pudo eliminar', true); }
@@ -1805,7 +1819,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.3';
+const VERSION = '3.4';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2039,6 +2053,7 @@ async function entrarCon(crudo, salaId, nombre) {
   vistoHasta = 0; miVisto = { id: 0, u: 0 };
   crudoActual = crudo;
   clave = await importarClave(crudo); sala = salaId; yo = nombre;
+  cargarOcultos();
   ultimaVersion = 0; temporal = 0; temporalId = 0;
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
   $('#entrada').classList.add('oculto'); $('#chat').classList.remove('oculto');
