@@ -162,7 +162,10 @@
     position: fixed; inset: 0; z-index: 20; background: #000;
     display: grid; grid-template-rows: 1fr auto;
   }
-  #visorCam video { width: 100%; height: 100%; object-fit: contain; min-height: 0; }
+  .camZona { position: relative; min-height: 0; }
+  #visorCam video, #previa { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .redondo.grande { width: 72px; height: 72px; }
+  .redondo.grande svg { width: 30px; height: 30px; }
   #visorCam video.espejo { transform: scaleX(-1); }
   .camBarra {
     display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center;
@@ -242,11 +245,19 @@
 </div>
 
 <div id="visorCam" class="oculto">
-  <video playsinline muted autoplay></video>
-  <div class="camBarra">
+  <div class="camZona">
+    <video playsinline muted autoplay></video>
+    <canvas id="previa" class="oculto"></canvas>
+  </div>
+  <div class="camBarra" id="barraCaptura">
     <button type="button" class="redondo claro" id="camCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
     <button type="button" id="camDisparar" aria-label="Hacer foto"></button>
     <button type="button" class="redondo claro" id="camGirar" aria-label="Cambiar de cámara"><svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7a5 5 0 0 1 4.6 7l1.5 1.5A7 7 0 0 0 12 5Zm-4.6 3.5L5.9 7A7 7 0 0 0 12 19v3l4-4-4-4v3a5 5 0 0 1-4.6-8.5Z"/></svg></button>
+  </div>
+  <div class="camBarra oculto" id="barraPrevia">
+    <button type="button" class="redondo claro" id="preRepetir" aria-label="Repetir"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <button type="button" class="redondo grande" id="preEnviar" aria-label="Enviar foto"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+    <button type="button" class="redondo claro" id="preRotar" aria-label="Girar foto"><svg viewBox="0 0 24 24"><path d="M12 4V1l4 4-4 4V6a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8Z"/></svg></button>
   </div>
 </div>
 
@@ -503,6 +514,40 @@ async function aJpeg(fuente, ancho, alto) {
    por falta de memoria y se pierda la foto. Aquí la cámara funciona dentro
    de la propia app, sin salir de ella. */
 let flujoCam = null, mirandoAtras = true;
+let gravedad = null, fotoBase = null, giroFoto = 0;
+
+/* Sensor de gravedad: sabe cómo sujetas el móvil aunque la pantalla no gire */
+const SIGNO_GRAVEDAD = /iPhone|iPad|iPod/.test(navigator.userAgent) ? -1 : 1;
+function alMoverse(e) {
+  const g = e.accelerationIncludingGravity;
+  if (g && g.x != null && g.y != null) gravedad = { x: g.x * SIGNO_GRAVEDAD, y: g.y * SIGNO_GRAVEDAD };
+}
+function pedirSensor() {
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
+    DeviceMotionEvent.requestPermission().catch(() => {}); // solo iPhone; debe ir dentro de un toque
+}
+/* Grados (en sentido horario) que hay que girar la foto para que quede derecha */
+function giroSegunSensor() {
+  if (!gravedad) return 0;
+  const { x, y } = gravedad;
+  if (Math.hypot(x, y) < 4) return 0; // móvil casi plano: no se puede saber
+  const movil = Math.abs(y) >= Math.abs(x) ? (y > 0 ? 0 : 180) : (x > 0 ? 270 : 90);
+  let a = screen.orientation?.angle ?? window.orientation ?? 0;
+  a = ((a % 360) + 360) % 360;
+  const pantalla = (360 - a) % 360;
+  return (movil - pantalla + 360) % 360;
+}
+
+function girarLienzo(fuente, w, h, grados) {
+  const c = document.createElement('canvas');
+  const cruza = grados % 180 !== 0;
+  c.width = cruza ? h : w; c.height = cruza ? w : h;
+  const x = c.getContext('2d');
+  x.translate(c.width / 2, c.height / 2);
+  x.rotate(grados * Math.PI / 180);
+  x.drawImage(fuente, -w / 2, -h / 2, w, h);
+  return c;
+}
 
 async function abrirCamara() {
   if (!navigator.mediaDevices?.getUserMedia) { $('#archivoCamara').click(); return; }
@@ -513,8 +558,10 @@ async function abrirCamara() {
       video: { facingMode: mirandoAtras ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1440 } }
     });
   } catch { estado('Sin permiso para la cámara', true); return; }
+  window.addEventListener('devicemotion', alMoverse);
   const v = $('#visorCam video');
   v.srcObject = flujoCam; v.classList.toggle('espejo', !mirandoAtras);
+  modoPrevia(false);
   $('#visorCam').classList.remove('oculto');
   try { await v.play(); } catch {}
 }
@@ -525,28 +572,55 @@ function cerrarFlujo() {
 }
 function cerrarCamara() {
   cerrarFlujo();
+  window.removeEventListener('devicemotion', alMoverse);
+  gravedad = null; fotoBase = null;
   $('#visorCam video').srcObject = null;
   $('#visorCam').classList.add('oculto');
+}
+function modoPrevia(si) {
+  $('#visorCam video').classList.toggle('oculto', si);
+  $('#previa').classList.toggle('oculto', !si);
+  $('#barraCaptura').classList.toggle('oculto', si);
+  $('#barraPrevia').classList.toggle('oculto', !si);
+}
+function pintarPrevia() {
+  const g = girarLienzo(fotoBase, fotoBase.width, fotoBase.height, giroFoto);
+  const p = $('#previa'); p.width = g.width; p.height = g.height;
+  p.getContext('2d').drawImage(g, 0, 0);
 }
 
 $('#camCerrar').onclick = cerrarCamara;
 $('#camGirar').onclick = () => { mirandoAtras = !mirandoAtras; abrirCamara(); };
-$('#camDisparar').onclick = async () => {
+$('#camDisparar').onclick = () => {
   const v = $('#visorCam video');
   if (!v.videoWidth) return;
-  const btn = $('#camDisparar'); btn.disabled = true;
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  fotoBase = c;
+  giroFoto = giroSegunSensor();
+  cerrarFlujo();
+  pintarPrevia();
+  modoPrevia(true);
+};
+$('#preRotar').onclick = () => { giroFoto = (giroFoto + 90) % 360; pintarPrevia(); };
+$('#preRepetir').onclick = () => { fotoBase = null; abrirCamara(); };
+$('#preEnviar').onclick = async () => {
+  if (!fotoBase) return;
+  const btn = $('#preEnviar'); btn.disabled = true;
   try {
-    const { blob, w, h } = await aJpeg(v, v.videoWidth, v.videoHeight);
+    const g = girarLienzo(fotoBase, fotoBase.width, fotoBase.height, giroFoto);
+    const { blob, w, h } = await aJpeg(g, g.width, g.height);
     cerrarCamara();
     await enviarAdjunto(blob, 'foto', { w, h });
-  } catch { estado('No se pudo hacer la foto', true); }
+  } catch { estado('No se pudo enviar la foto', true); }
   btn.disabled = false;
 };
 
 const menuFoto = $('#menuFoto');
 $('#adjuntar').onclick = e => { e.stopPropagation(); menuFoto.classList.toggle('oculto'); };
 document.addEventListener('click', e => { if (!menuFoto.contains(e.target)) menuFoto.classList.add('oculto'); });
-$('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); abrirCamara(); };
+$('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); pedirSensor(); abrirCamara(); };
 $('#opGaleria').onclick = () => { menuFoto.classList.add('oculto'); $('#archivoGaleria').click(); };
 
 async function fotoElegida(input) {

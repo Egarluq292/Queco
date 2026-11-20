@@ -1,7 +1,7 @@
 // Susurro · service worker mínimo
 // Solo guarda la propia app (no los mensajes) para poder abrirla sin red.
 // Siempre intenta la red primero, así las actualizaciones llegan solas.
-const CACHE = 'susurro-v5';
+const CACHE = 'susurro-v6';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icono-192.png', './icono-512.png'];
 
 self.addEventListener('install', e => {
