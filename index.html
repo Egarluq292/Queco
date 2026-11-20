@@ -315,7 +315,7 @@
   /* Portada */
   #portada { position: fixed; inset: 0; z-index: 12; background: var(--fondo); display: grid; grid-template-rows: auto 1fr; }
   .pCabecera { display: flex; align-items: center; gap: 4px; padding: calc(18px + env(safe-area-inset-top)) 16px 10px; }
-  .pCabecera h1 { font-size: 30px; font-weight: 600; padding-left: 4px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .pCabecera h1 { font-size: 30px; font-weight: 600; padding-left: 4px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; touch-action: manipulation; }
   .pCabecera.sub h1 { font-size: 22px; }
   .pCuerpo { overflow-y: auto; padding: 4px 16px calc(32px + env(safe-area-inset-bottom)); display: grid; gap: 14px; align-content: start; }
   .pBuscar {
@@ -481,6 +481,12 @@
         <div class="ayuda">Pide un PIN de 4 cifras al abrir la app y al volver a ella tras 30 segundos.</div>
       </div>
       <div class="opcion">
+        <div class="etq">Portada de ajustes al abrir
+          <label class="interruptor"><input type="checkbox" id="intPortada"><span></span></label>
+        </div>
+        <div class="ayuda">La app se abre como una pantalla de ajustes. Para entrar: mantén pulsado el título «Preferencias». Si vuelves en menos de 1 minuto, entras directamente.</div>
+      </div>
+      <div class="opcion">
         <div class="etq">Tu nombre</div>
         <div class="fila"><input type="text" id="nuevoNombre" maxlength="24" autocapitalize="words" spellcheck="false"><button class="mini" id="guardarNombre">Guardar</button></div>
       </div>
@@ -618,7 +624,7 @@ let disp = localStorage.getItem('susurro.disp');
 if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorage.setItem('susurro.disp', disp); }
 
 /* ---------- Ajustes locales ---------- */
-const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
+const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true, portada: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
 const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajustes));
 /* Administrador: el móvil cuyo identificador está en esta lista (se ve en Ajustes, abajo del todo) */
 const ADMIN_DISPOSITIVOS = ['ee23-f250'];
@@ -1688,7 +1694,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.0';
+const VERSION = '3.1';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -1703,10 +1709,12 @@ function abrirAjustes() {
   marcarSegmento('#segTemporal', String(temporal));
   $('#intNotif').checked = !!ajustes.notif;
   $('#intPin').checked = pinActivo();
+  $('#intPortada').checked = ajustes.portada;
   $('#nuevoNombre').value = yo || '';
   $('#ajustes').classList.remove('oculto');
 }
 $('#abrirAjustes').onclick = abrirAjustes;
+$('#intPortada').onchange = e => { ajustes.portada = e.target.checked; guardarAjustes(); };
 $('#intConservar').onchange = e => { ajustes.conservar = e.target.checked; guardarAjustes(); };
 $('#cerrarAjustes').onclick = () => $('#ajustes').classList.add('oculto');
 
@@ -1897,14 +1905,20 @@ function cerrarConversacion() {
 
 /* Al salir de la app se vuelve a la portada; con PIN, pasados 30 s hay que volver a ponerlo.
    Al elegir una foto de la galería o guardar algo, el móvil sale un momento de la app: eso no cuenta. */
-let ocultoDesde = 0, selectorAbierto = false;
+let ocultoDesde = 0, selectorAbierto = false, estabaEnChat = false;
+const VUELTA_RAPIDA = 60000; // si vuelves antes de 1 minuto, entras directamente
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     ocultoDesde = Date.now();
-    if (!selectorAbierto) mostrarPortada();
+    estabaEnChat = !!clave && $('#portada').classList.contains('oculto') && $('#entrada').classList.contains('oculto');
+    if (!selectorAbierto && ajustes.portada) mostrarPortada();
+  } else if (selectorAbierto) {
+    selectorAbierto = false;
   } else {
-    if (selectorAbierto) selectorAbierto = false;
-    else if (pinActivo() && clave && Date.now() - ocultoDesde > 30000) cerrarConversacion();
+    const fuera = Date.now() - ocultoDesde;
+    if (pinActivo() && clave && fuera > 30000) cerrarConversacion();
+    if (ajustes.portada) { if (estabaEnChat && clave && fuera < VUELTA_RAPIDA) mostrarChat(); }
+    else if (!clave) abrirSecreto();
   }
   arrancarSondeo();
 });
@@ -2091,10 +2105,21 @@ async function buscarEnPortada(texto) {
   } finally { comprobandoPin = false; }
 }
 
+/* Mantener pulsado el título «Preferencias» 1 segundo */
+let relojLargoTitulo = null;
+$('#pTitulo').addEventListener('pointerdown', () => {
+  if (paginaPortada !== 'inicio') return;
+  clearTimeout(relojLargoTitulo);
+  relojLargoTitulo = setTimeout(() => { relojLargoTitulo = null; toquesTitulo = -1; abrirSecreto(); }, 900);
+});
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('#pTitulo').addEventListener(ev, () => { clearTimeout(relojLargoTitulo); relojLargoTitulo = null; });
+$('#pTitulo').addEventListener('contextmenu', e => e.preventDefault());
+
 /* 5 toques en el título «Preferencias» de la pantalla principal */
 let toquesTitulo = 0, relojTitulo = null;
 $('#pTitulo').addEventListener('click', () => {
   if (paginaPortada !== 'inicio') return;
+  if (toquesTitulo < 0) { toquesTitulo = 0; return; } // fue una pulsación larga
   clearTimeout(relojTitulo);
   relojTitulo = setTimeout(() => { toquesTitulo = 0; }, 3000);
   if (++toquesTitulo >= 5) { toquesTitulo = 0; abrirSecreto(); }
@@ -2153,6 +2178,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 
 $('#nombre').value = leerSesion()?.n || '';
 mostrarPortada();
+if (!ajustes.portada) abrirSecreto();
 </script>
 </body>
 </html>
