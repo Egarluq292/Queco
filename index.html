@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src data: blob:; media-src blob:; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#0f3d3e">
+<title>Susurro</title>
+<style>
+  :root {
+    --fondo: #f4f2ee; --panel: #ffffff; --texto: #1d1d1b; --suave: #77756f;
+    --borde: #e2dfd8; --acento: #0f3d3e; --acento-txt: #ffffff;
+    --burbuja: #ffffff; --mia: #0f3d3e; --mia-txt: #f4f2ee; --error: #a33a2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #121413; --panel: #1b1e1d; --texto: #ecebe7; --suave: #8f938f;
+      --borde: #2a2e2c; --acento: #5fb3a6; --acento-txt: #0d1211;
+      --burbuja: #1f2322; --mia: #2c6b63; --mia-txt: #f1f4f2; --error: #e07a6a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--fondo); color: var(--texto);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  .oculto { display: none !important; }
+
+  /* Entrada */
+  #entrada {
+    min-height: 100dvh; display: grid; place-items: center; padding: 24px;
+  }
+  .tarjeta {
+    width: 100%; max-width: 380px; background: var(--panel);
+    border: 1px solid var(--borde); border-radius: 20px; padding: 32px 28px;
+    display: grid; gap: 18px; text-align: center;
+  }
+  .logo {
+    width: 56px; height: 56px; margin: 0 auto; border-radius: 16px;
+    background: var(--acento); display: grid; place-items: center;
+  }
+  .logo svg { width: 26px; height: 26px; fill: var(--acento-txt); }
+  h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+  .lema { color: var(--suave); font-size: 14px; margin-top: -10px; }
+  .campo { display: grid; gap: 6px; text-align: left; }
+  .campo label { font-size: 13px; color: var(--suave); padding-left: 2px; }
+  .fila { display: flex; gap: 8px; }
+  .fila input { flex: 1; min-width: 0; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--borde); background: var(--fondo); outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--acento); }
+  .mini {
+    padding: 0 12px; border-radius: 12px; border: 1px solid var(--borde);
+    background: var(--fondo); cursor: pointer; font-size: 14px;
+  }
+  .casilla {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 14px; color: var(--suave);
+  }
+  .principal {
+    padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+    background: var(--acento); color: var(--acento-txt); font-weight: 600;
+  }
+  .principal:disabled { opacity: .6; cursor: default; }
+  .nota { font-size: 12.5px; color: var(--suave); }
+  .error { color: var(--error); font-size: 14px; min-height: 1em; }
+
+  /* Chat */
+  #chat { height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; }
+  header {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    background: var(--panel); border-bottom: 1px solid var(--borde);
+  }
+  header .titulo { text-align: center; font-weight: 650; }
+  header .titulo small { display: block; font-size: 11.5px; font-weight: 400; color: var(--suave); }
+  header .izq { justify-self: start; } header .der { justify-self: end; }
+  .enlace {
+    background: none; border: 0; color: var(--acento); cursor: pointer;
+    font-size: 14px; padding: 6px 4px;
+  }
+  #lista {
+    overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .dia {
+    align-self: center; font-size: 12px; color: var(--suave);
+    margin: 10px 0 4px; padding: 3px 10px; border-radius: 99px; background: var(--panel);
+  }
+  .msj {
+    max-width: 78%; padding: 8px 12px 6px; border-radius: 16px;
+    background: var(--burbuja); border: 1px solid var(--borde);
+    align-self: flex-start; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .msj.mio {
+    align-self: flex-end; background: var(--mia); color: var(--mia-txt); border-color: transparent;
+  }
+  .msj .autor { font-size: 12px; font-weight: 600; color: var(--acento); margin-bottom: 1px; }
+  .msj .hora { font-size: 11px; opacity: .65; text-align: right; margin-top: 2px; }
+  .vacio { margin: auto; color: var(--suave); font-size: 14px; text-align: center; }
+  footer {
+    display: flex; gap: 10px; align-items: flex-end;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--panel); border-top: 1px solid var(--borde);
+  }
+  textarea {
+    flex: 1; resize: none; max-height: 140px; padding: 10px 14px;
+    border-radius: 20px; border: 1px solid var(--borde); background: var(--fondo); outline: none;
+  }
+  .redondo {
+    width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0;
+    background: var(--acento); cursor: pointer; display: grid; place-items: center;
+  }
+  .redondo svg { width: 20px; height: 20px; fill: var(--acento-txt); }
+  .redondo.claro { background: var(--fondo); border: 1px solid var(--borde); }
+  .redondo.claro svg { fill: var(--acento); }
+  .redondo:disabled { opacity: .5; }
+
+  /* Adjuntos */
+  .msj.con-foto { padding: 4px 4px 6px; }
+  .msj.con-foto .autor { padding: 2px 8px 0; }
+  .msj.con-foto .hora { padding-right: 8px; }
+  .foto {
+    display: block; width: 240px; max-width: 100%; height: auto; border-radius: 12px;
+    background: var(--borde); cursor: zoom-in;
+  }
+  .msj audio { display: block; width: 240px; max-width: 100%; height: 40px; margin-top: 2px; }
+  .cargando { font-size: 13px; opacity: .7; padding: 4px 0; }
+
+  /* Grabación */
+  .grabando { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; }
+  .punto { width: 10px; height: 10px; border-radius: 50%; background: var(--error); animation: latido 1s infinite; }
+  @keyframes latido { 50% { opacity: .25; } }
+  #tiempo { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* Visor de fotos */
+  #visor {
+    position: fixed; inset: 0; background: rgba(0,0,0,.92); display: grid; place-items: center;
+    padding: 16px; z-index: 10; cursor: zoom-out;
+  }
+  #visor img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Pantalla de entrada -->
+<main id="entrada">
+  <form class="tarjeta" id="formEntrada" autocomplete="off">
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 1a5 5 0 0 0-5 5v4H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm-3 9V6a3 3 0 0 1 6 0v4H9Z"/></svg></div>
+    <h1>Susurro</h1>
+    <p class="lema">Mensajes cifrados entre dos personas</p>
+
+    <div class="campo">
+      <label for="nombre">Tu nombre</label>
+      <input type="text" id="nombre" maxlength="24" required autocapitalize="words" spellcheck="false">
+    </div>
+
+    <div class="campo">
+      <label for="frase">Frase secreta compartida</label>
+      <div class="fila">
+        <input type="password" id="frase" required autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="button" class="mini" id="ver">Ver</button>
+      </div>
+    </div>
+
+    <label class="casilla"><input type="checkbox" id="recordar"> Recordar en este dispositivo</label>
+
+    <button class="principal" id="entrar">Entrar</button>
+    <p class="error" id="errorEntrada"></p>
+
+    <button type="button" class="enlace" id="generar">Generar una frase nueva</button>
+    <p class="nota">La frase no sale nunca de tu móvil. Compártela en persona, nunca por otra app.</p>
+  </form>
+</main>
+
+<!-- Conversación -->
+<section id="chat" class="oculto">
+  <header>
+    <button class="enlace izq" id="salir">Salir</button>
+    <div class="titulo">Susurro<small id="estado">Cifrado de extremo a extremo</small></div>
+    <button class="enlace der" id="vaciarBtn">Vaciar</button>
+  </header>
+  <div id="lista"><p class="vacio" id="vacio">Aún no hay mensajes.</p></div>
+  <footer id="barraNormal">
+    <button class="redondo claro" id="adjuntar" aria-label="Foto"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
+    <input type="file" id="archivo" accept="image/*" class="oculto">
+    <textarea id="texto" rows="1" maxlength="4000" placeholder="Escribe un mensaje"></textarea>
+    <button class="redondo" id="accion" aria-label="Grabar audio"></button>
+  </footer>
+  <footer id="barraGrabacion" class="oculto">
+    <button class="redondo claro" id="cancelarGrab" aria-label="Cancelar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <div class="grabando"><span class="punto"></span><span id="tiempo">0:00</span></div>
+    <button class="redondo" id="pararGrab" aria-label="Enviar audio"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+  </footer>
+</section>
+
+<div id="visor" class="oculto"><img alt=""></div>
+
+<script>
+'use strict';
+
+/* ===== Configuración: pon aquí los datos de tu proyecto de Supabase ===== */
+const SUPABASE_URL = 'https://kwnxheyfnhwnunlhhpps.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_d2JVmRdZ6grY54z2KvrR6w_vaqhbMxH';
+/* ======================================================================= */
+
+const SAL = new TextEncoder().encode('susurro/v1/sal-fija');
+const ITERACIONES = 600000;
+const INTERVALO = 4000;
+const ALMACEN = 'susurro.sesion';
+
+const $ = s => document.querySelector(s);
+const te = new TextEncoder(), td = new TextDecoder();
+
+let clave = null, sala = null, yo = null, ultimo = 0, temporizador = null, leyendo = false, ultimoDia = '';
+
+const aB64 = u8 => {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const aHex = u8 => [...u8].map(b => b.toString(16).padStart(2, '0')).join('');
+
+/* Dispositivo: identificador aleatorio de este dispositivo (solo viaja cifrado) */
+let disp = localStorage.getItem('susurro.disp');
+if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorage.setItem('susurro.disp', disp); }
+
+/* ---------- Criptografía ---------- */
+const normalizar = f => f.normalize('NFC').toLowerCase().replace(/[\s\-_.]+/g, '');
+
+async function derivar(frase) {
+  const base = await crypto.subtle.importKey('raw', te.encode(normalizar(frase)), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: SAL, iterations: ITERACIONES }, base, 512));
+  const crudo = bits.slice(0, 32);
+  const salaId = aHex(new Uint8Array(await crypto.subtle.digest('SHA-256', bits.slice(32))));
+  return { crudo, salaId };
+}
+
+const importarClave = crudo => crypto.subtle.importKey('raw', crudo, 'AES-GCM', false, ['encrypt', 'decrypt']);
+
+/* «extra» separa los contextos: '' para mensajes, ':adj' para adjuntos */
+async function cifrarBytes(u8, extra = '') {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: te.encode(sala + extra) }, clave, u8));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+  return out;
+}
+
+async function descifrarBytes(u, extra = '') {
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: u.slice(0, 12), additionalData: te.encode(sala + extra) }, clave, u.slice(12)));
+  } catch { return null; } // ajeno o manipulado: se ignora
+}
+
+const cifrar = async obj => aB64(await cifrarBytes(te.encode(JSON.stringify(obj))));
+
+async function descifrar(b64) {
+  try {
+    const pt = await descifrarBytes(deB64(b64));
+    return pt ? JSON.parse(td.decode(pt)) : null;
+  } catch { return null; }
+}
+
+function generarFrase() {
+  const abc = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 símbolos, sin l ni o
+  const r = crypto.getRandomValues(new Uint8Array(25));
+  const c = [...r].map(b => abc[b & 31]).join('');
+  return c.match(/.{5}/g).join('-'); // 125 bits
+}
+
+/* ---------- Servidor ---------- */
+async function rpc(fn, cuerpo) {
+  const h = { 'Content-Type': 'application/json', apikey: SUPABASE_KEY };
+  if (SUPABASE_KEY.startsWith('eyJ')) h.Authorization = 'Bearer ' + SUPABASE_KEY;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST', headers: h, body: JSON.stringify(cuerpo), cache: 'no-store', referrerPolicy: 'no-referrer'
+  });
+  if (!r.ok) throw new Error(fn + ' ' + r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+/* ---------- Interfaz ---------- */
+const fmtHora = ts => new Date(ts).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+const fmtDia = ts => new Date(ts).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+
+function pintar(m) {
+  $('#vacio').classList.add('oculto');
+  const lista = $('#lista');
+  const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 80;
+  const dia = fmtDia(m.ts);
+  if (dia !== ultimoDia) {
+    ultimoDia = dia;
+    const d = document.createElement('div'); d.className = 'dia'; d.textContent = dia; lista.append(d);
+  }
+  const b = document.createElement('div');
+  const mio = m.d === disp;
+  b.className = 'msj' + (mio ? ' mio' : '');
+  if (!mio) { const a = document.createElement('div'); a.className = 'autor'; a.textContent = m.n; b.append(a); }
+  if (m.k === 'foto') {
+    b.classList.add('con-foto');
+    const img = document.createElement('img'); img.className = 'foto'; img.alt = 'Foto';
+    if (m.w && m.h) { img.width = m.w; img.height = m.h; }
+    cargarAdjunto(m.a, m.m).then(url => { if (url) img.src = url; else img.alt = 'Foto no disponible'; });
+    img.onclick = () => { if (img.src) { $('#visor img').src = img.src; $('#visor').classList.remove('oculto'); } };
+    b.append(img);
+  } else if (m.k === 'audio') {
+    const c = document.createElement('div'); c.className = 'cargando'; c.textContent = 'Cargando audio…';
+    b.append(c);
+    cargarAdjunto(m.a, m.m).then(url => {
+      if (!url) { c.textContent = 'Audio no disponible'; return; }
+      const au = document.createElement('audio'); au.controls = true; au.preload = 'metadata'; au.src = url;
+      c.replaceWith(au);
+    });
+  } else {
+    const t = document.createElement('div'); t.textContent = m.t; b.append(t);
+  }
+  const h = document.createElement('div'); h.className = 'hora'; h.textContent = fmtHora(m.ts); b.append(h);
+  lista.append(b);
+  if (abajo || mio) lista.scrollTop = lista.scrollHeight;
+}
+
+function estado(txt, error = false) {
+  const e = $('#estado'); e.textContent = txt; e.style.color = error ? 'var(--error)' : '';
+}
+
+async function leer() {
+  if (leyendo || !clave) return;
+  leyendo = true;
+  try {
+    let filas;
+    do {
+      filas = await rpc('leer', { p_sala: sala, p_desde: ultimo });
+      for (const f of filas) {
+        ultimo = Math.max(ultimo, f.id);
+        const m = await descifrar(f.datos);
+        if (m && (typeof m.t === 'string' || (m.k && Number.isInteger(m.a)))) pintar(m);
+      }
+    } while (filas.length === 200);
+    estado('Cifrado de extremo a extremo');
+  } catch { estado('Sin conexión con el servidor', true); }
+  leyendo = false;
+}
+
+function arrancarSondeo() {
+  clearInterval(temporizador);
+  if (document.visibilityState === 'visible' && clave) { leer(); temporizador = setInterval(leer, INTERVALO); }
+}
+document.addEventListener('visibilitychange', arrancarSondeo);
+
+async function entrarCon(crudo, salaId, nombre) {
+  limpiarCache();
+  clave = await importarClave(crudo); sala = salaId; yo = nombre;
+  ultimo = 0; ultimoDia = '';
+  $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
+  $('#entrada').classList.add('oculto'); $('#chat').classList.remove('oculto');
+  arrancarSondeo();
+}
+
+/* ---------- Eventos ---------- */
+$('#ver').onclick = () => {
+  const f = $('#frase'); const t = f.type === 'password';
+  f.type = t ? 'text' : 'password'; $('#ver').textContent = t ? 'Ocultar' : 'Ver';
+};
+
+$('#generar').onclick = () => {
+  $('#frase').value = generarFrase(); $('#frase').type = 'text'; $('#ver').textContent = 'Ocultar';
+  $('#errorEntrada').textContent = 'Apúntala en papel y dásela a tu colega en persona.';
+};
+
+$('#formEntrada').onsubmit = async e => {
+  e.preventDefault();
+  const nombre = $('#nombre').value.trim(), frase = $('#frase').value;
+  if (normalizar(frase).length < 20) { $('#errorEntrada').textContent = 'La frase debe tener al menos 20 caracteres.'; return; }
+  if (SUPABASE_URL.includes('TU-PROYECTO')) { $('#errorEntrada').textContent = 'Falta configurar Supabase en el código.'; return; }
+  const btn = $('#entrar'); btn.disabled = true; btn.textContent = 'Generando clave…';
+  $('#errorEntrada').textContent = '';
+  try {
+    const { crudo, salaId } = await derivar(frase);
+    if ($('#recordar').checked) localStorage.setItem(ALMACEN, JSON.stringify({ k: aB64(crudo), s: salaId, n: nombre }));
+    $('#frase').value = '';
+    await entrarCon(crudo, salaId, nombre);
+  } catch { $('#errorEntrada').textContent = 'No se pudo generar la clave.'; }
+  btn.disabled = false; btn.textContent = 'Entrar';
+};
+
+/* ---------- Adjuntos ---------- */
+const cacheAdj = new Map();
+function cargarAdjunto(id, mime) {
+  if (!cacheAdj.has(id)) cacheAdj.set(id, (async () => {
+    try {
+      const b64 = await rpc('bajar', { p_sala: sala, p_id: id });
+      if (!b64) return null;
+      const u = await descifrarBytes(deB64(b64), ':adj');
+      return u ? URL.createObjectURL(new Blob([u], { type: mime || '' })) : null;
+    } catch { cacheAdj.delete(id); return null; }
+  })());
+  return cacheAdj.get(id);
+}
+function limpiarCache() {
+  for (const p of cacheAdj.values()) p.then(u => u && URL.revokeObjectURL(u));
+  cacheAdj.clear();
+}
+
+const enviarMensaje = async obj =>
+  rpc('enviar', { p_sala: sala, p_datos: await cifrar({ n: yo, d: disp, ts: Date.now(), ...obj }) });
+
+async function enviarAdjunto(blob, k, extra) {
+  estado(k === 'foto' ? 'Enviando foto…' : 'Enviando audio…');
+  try {
+    const u8 = new Uint8Array(await blob.arrayBuffer());
+    const id = await rpc('subir', { p_sala: sala, p_datos: aB64(await cifrarBytes(u8, ':adj')) });
+    await enviarMensaje({ k, a: id, m: blob.type, ...extra });
+    await leer();
+  } catch { estado('No se pudo enviar', true); }
+}
+
+/* Reduce la foto y elimina sus metadatos (incluida la ubicación GPS) */
+async function reducirFoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    let res = null;
+    for (const [max, q] of [[1600, .8], [1280, .7], [1024, .6]]) {
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+      res = { blob, w: c.width, h: c.height };
+      if (blob.size <= 600000) break;
+    }
+    return res;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+$('#adjuntar').onclick = () => $('#archivo').click();
+$('#archivo').onchange = async () => {
+  const f = $('#archivo').files[0]; $('#archivo').value = '';
+  if (!f) return;
+  try {
+    const { blob, w, h } = await reducirFoto(f);
+    await enviarAdjunto(blob, 'foto', { w, h });
+  } catch { estado('No se pudo leer la foto', true); }
+};
+
+$('#visor').onclick = () => { $('#visor').classList.add('oculto'); $('#visor img').removeAttribute('src'); };
+
+/* ---------- Audio ---------- */
+const MAX_AUDIO = 180; // segundos
+let grabador = null, cancelarAudio = false, relojGrab = null;
+
+function formatoAudio() {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+  // AAC en MP4 se reproduce tanto en iPhone como en Android; WebM queda de reserva
+  for (const t of ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'])
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+
+function modoGrabacion(si) {
+  $('#barraNormal').classList.toggle('oculto', si);
+  $('#barraGrabacion').classList.toggle('oculto', !si);
+}
+
+async function empezarGrabacion() {
+  if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+    estado('Este navegador no puede grabar audio', true); return;
+  }
+  let flujo;
+  try { flujo = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { estado('Sin permiso para el micrófono', true); return; }
+
+  const tipo = formatoAudio();
+  const opciones = { audioBitsPerSecond: 32000 };
+  if (tipo) opciones.mimeType = tipo;
+  let g;
+  try { g = new MediaRecorder(flujo, opciones); } catch { g = new MediaRecorder(flujo); }
+  const trozos = []; const inicio = Date.now();
+  cancelarAudio = false; grabador = g;
+
+  g.ondataavailable = e => { if (e.data.size) trozos.push(e.data); };
+  g.onstop = async () => {
+    flujo.getTracks().forEach(t => t.stop());
+    clearInterval(relojGrab); grabador = null; modoGrabacion(false);
+    const s = Math.round((Date.now() - inicio) / 1000);
+    if (cancelarAudio || !trozos.length || s < 1) return;
+    const mime = (g.mimeType || tipo || 'audio/mp4').split(';')[0];
+    await enviarAdjunto(new Blob(trozos, { type: mime }), 'audio', { s });
+  };
+
+  g.start(1000);
+  $('#tiempo').textContent = '0:00'; modoGrabacion(true);
+  relojGrab = setInterval(() => {
+    const s = Math.floor((Date.now() - inicio) / 1000);
+    $('#tiempo').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s >= MAX_AUDIO && grabador) grabador.stop();
+  }, 250);
+}
+
+$('#pararGrab').onclick = () => { if (grabador) grabador.stop(); };
+$('#cancelarGrab').onclick = () => { cancelarAudio = true; if (grabador) grabador.stop(); };
+
+/* ---------- Texto ---------- */
+const ICONO_ENVIAR = '<svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>';
+const ICONO_MICRO = '<svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v7a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V22h2v-3.1a7 7 0 0 0 6-6.9h-2Z"/></svg>';
+let iconoActual = '';
+function actualizarAccion() {
+  const hay = $('#texto').value.trim() !== '';
+  const nuevo = hay ? 'enviar' : 'micro';
+  if (nuevo === iconoActual) return;
+  iconoActual = nuevo;
+  $('#accion').innerHTML = hay ? ICONO_ENVIAR : ICONO_MICRO;
+  $('#accion').setAttribute('aria-label', hay ? 'Enviar' : 'Grabar audio');
+}
+
+async function enviar() {
+  const txt = $('#texto').value.trim();
+  if (!txt) return;
+  const btn = $('#accion'); btn.disabled = true;
+  try {
+    await enviarMensaje({ t: txt });
+    $('#texto').value = ''; ajustar();
+    await leer();
+  } catch { estado('No se pudo enviar', true); }
+  btn.disabled = false; $('#texto').focus();
+}
+$('#accion').onclick = () => $('#texto').value.trim() ? enviar() : empezarGrabacion();
+$('#texto').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); enviar(); }
+});
+function ajustar() {
+  const t = $('#texto'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px';
+  actualizarAccion();
+}
+$('#texto').addEventListener('input', ajustar);
+actualizarAccion();
+
+$('#salir').onclick = () => {
+  clearInterval(temporizador);
+  localStorage.removeItem(ALMACEN);
+  limpiarCache();
+  clave = sala = yo = null;
+  $('#chat').classList.add('oculto'); $('#entrada').classList.remove('oculto');
+};
+
+$('#vaciarBtn').onclick = async () => {
+  if (!confirm('¿Borrar toda la conversación del servidor? Se borrará también para tu colega.')) return;
+  try {
+    await rpc('vaciar', { p_sala: sala });
+    limpiarCache();
+    $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto'); ultimoDia = '';
+    ultimo = 0;
+  } catch { estado('No se pudo vaciar', true); }
+};
+
+/* ---------- Inicio ---------- */
+(async () => {
+  try {
+    const g = JSON.parse(localStorage.getItem(ALMACEN) || 'null');
+    if (g) { $('#nombre').value = g.n; await entrarCon(deB64(g.k), g.s, g.n); }
+  } catch { localStorage.removeItem(ALMACEN); }
+})();
+</script>
+</body>
+</html>
