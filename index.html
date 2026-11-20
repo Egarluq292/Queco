@@ -145,6 +145,11 @@
   .hoja .emojis { display: flex; justify-content: space-between; background: var(--panel); border-radius: 14px; padding: 6px 8px; }
   .hoja .emojis button { font-size: 26px; padding: 6px; border-radius: 50%; width: 46px; height: 46px; line-height: 1; }
   .hoja .emojis button.mia { background: var(--borde); }
+  .hoja .emojis button.masEmoji { font-size: 24px; color: var(--suave); border: 1px dashed var(--borde); }
+  .panelEmoji { padding: 12px; gap: 10px; }
+  #emojiEntrada { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo); outline: none; font-size: 16px; text-align: center; }
+  .rejilla { display: grid; grid-template-columns: repeat(8, 1fr); max-height: 34vh; overflow-y: auto; }
+  .hoja .rejilla button { font-size: 25px; padding: 6px 0; border: 0 !important; }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
   .msj.eliminado .hora { color: var(--error); opacity: 1; }
   .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
@@ -528,6 +533,17 @@
     <div class="emojis oculto" id="hojaEmojis"></div>
     <div class="grupoBotones" id="hojaBotones"></div>
     <button class="cancelar" id="hojaCancelar">Cancelar</button>
+  </div>
+</div>
+
+<!-- Panel de emojis: cualquiera del teclado o de la rejilla -->
+<div id="panelEmoji" class="velo oculto">
+  <div class="hoja">
+    <div class="grupoBotones panelEmoji">
+      <input type="text" id="emojiEntrada" placeholder="Escribe un emoji con el teclado" autocomplete="off" enterkeyhint="done">
+      <div class="rejilla" id="emojiRejilla"></div>
+    </div>
+    <button class="cancelar" id="emojiCancelar">Cancelar</button>
   </div>
 </div>
 
@@ -1665,11 +1681,18 @@ $('#velo').addEventListener('pointerdown', () => { toqueNuevoEnHoja = true; });
 function abrirHoja(opciones, { emojis = null } = {}) {
   const fila = $('#hojaEmojis'); fila.replaceChildren();
   fila.classList.toggle('oculto', !emojis);
-  if (emojis) for (const e of EMOJIS) {
-    const b = document.createElement('button'); b.textContent = e;
-    if (emojis.actual === e) b.className = 'mia';
-    b.onclick = () => { if (hojaReciente()) return; cerrarHoja(); emojis.elegir(e); };
-    fila.append(b);
+  if (emojis) {
+    const lista = EMOJIS.includes(emojis.actual) || !emojis.actual ? EMOJIS.slice(0, 6) : [emojis.actual, ...EMOJIS.slice(0, 5)];
+    for (const e of lista) {
+      const b = document.createElement('button'); b.textContent = e;
+      if (emojis.actual === e) b.className = 'mia';
+      b.onclick = () => { if (hojaReciente()) return; cerrarHoja(); emojis.elegir(e); };
+      fila.append(b);
+    }
+    const mas = document.createElement('button'); mas.textContent = '+'; mas.className = 'masEmoji';
+    mas.setAttribute('aria-label', 'Más emojis');
+    mas.onclick = () => { if (hojaReciente()) return; cerrarHoja(); abrirPanelEmoji(emojis.elegir); };
+    fila.append(mas);
   }
   const cont = $('#hojaBotones'); cont.replaceChildren();
   for (const o of opciones) {
@@ -1687,6 +1710,36 @@ function abrirHoja(opciones, { emojis = null } = {}) {
   $('#velo').classList.remove('oculto');
 }
 function cerrarHoja() { $('#velo').classList.add('oculto'); }
+
+/* Más emojis: la rejilla o cualquiera escrito con el teclado del móvil */
+const MAS_EMOJIS = ['😀','😁','😅','🤣','😊','😍','🥰','😘','😜','🤔','🙄','😴','😎','🤩','🥳','😡',
+  '🤯','😱','🤗','🤫','👏','🙌','💪','👌','✌️','🤞','👀','🔥','✨','🎉','💯','✅',
+  '❌','💔','🌹','☕','🍻','⚽','🎁','🙈'];
+let emojiElegido = null;
+const segmentador = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('es', { granularity: 'grapheme' }) : null;
+function abrirPanelEmoji(elegir) {
+  emojiElegido = elegir;
+  const r = $('#emojiRejilla');
+  if (!r.childElementCount) for (const e of MAS_EMOJIS) {
+    const b = document.createElement('button'); b.textContent = e;
+    b.onclick = () => elegirEmoji(e);
+    r.append(b);
+  }
+  const inp = $('#emojiEntrada'); inp.value = '';
+  $('#panelEmoji').classList.remove('oculto');
+  inp.focus(); // abre el teclado: desde ahí se elige cualquier emoji
+}
+function cerrarPanelEmoji() { $('#panelEmoji').classList.add('oculto'); $('#emojiEntrada').blur(); emojiElegido = null; }
+function elegirEmoji(e) { const f = emojiElegido; cerrarPanelEmoji(); if (f) f(e); }
+$('#emojiEntrada').addEventListener('input', e => {
+  const v = e.target.value;
+  const partes = segmentador ? [...segmentador.segment(v)].map(s => s.segment) : [...v];
+  const emoji = partes.find(g => /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(g));
+  if (emoji) elegirEmoji(emoji);
+  else if (v) e.target.value = ''; // solo se admiten emojis
+});
+$('#emojiCancelar').onclick = cerrarPanelEmoji;
+$('#panelEmoji').onclick = e => { if (e.target.id === 'panelEmoji') cerrarPanelEmoji(); };
 $('#hojaCancelar').onclick = () => { if (!hojaReciente()) cerrarHoja(); };
 $('#velo').onclick = e => { if (e.target.id === 'velo' && !hojaReciente()) cerrarHoja(); };
 
@@ -1819,7 +1872,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.4';
+const VERSION = '3.5';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2252,7 +2305,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
-  cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor();
+  cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji();
   menuFoto.classList.add('oculto');
   for (const s of ['#chat', '#ajustes', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
   if (pinResolver) terminarPin(null);
