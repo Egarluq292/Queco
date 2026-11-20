@@ -572,8 +572,11 @@ let disp = localStorage.getItem('susurro.disp');
 if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorage.setItem('susurro.disp', disp); }
 
 /* ---------- Ajustes locales ---------- */
-const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, admin: false, conservar: false }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
+const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
 const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajustes));
+/* Administrador: quien entra con el nombre «Esteban» */
+const ADMIN = 'esteban';
+const esAdmin = () => !!yo && yo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === ADMIN;
 function aplicarApariencia() {
   if (ajustes.tema === 'auto') document.documentElement.removeAttribute('data-tema');
   else document.documentElement.setAttribute('data-tema', ajustes.tema);
@@ -868,7 +871,7 @@ async function leer() {
         if (f.datos === null && mensajes.has(f.id)) {
           const reg = mensajes.get(f.id);
           // Lo borró quien lo envió: si fue tu colega, se queda en tu móvil marcado en rojo
-          if (ajustes.admin && ajustes.conservar && reg.m.d !== disp && !reg.eliminado && !(reg.m.x && reg.m.x < Date.now())) { await conservarBorrado(f.id); cambios = true; continue; }
+          if (esAdmin() && ajustes.conservar && reg.m.d !== disp && !reg.eliminado && !(reg.m.x && reg.m.x < Date.now())) { await conservarBorrado(f.id); cambios = true; continue; }
           if (reg.eliminado) continue;
         }
         if (f.datos === '' && mensajes.get(f.id)?.eliminado) quitarBorrado(f.id);
@@ -1469,7 +1472,7 @@ function modoPantalla() {
 }
 function abrirAjustes() {
   $('#version').textContent = `Versión ${VERSION} · ${modoPantalla()}`;
-  $('#grupoAdmin').classList.toggle('oculto', !ajustes.admin);
+  $('#grupoAdmin').classList.toggle('oculto', !esAdmin());
   $('#intConservar').checked = !!ajustes.conservar;
   marcarSegmento('#segTema', ajustes.tema);
   marcarSegmento('#segLetra', String(ajustes.letra));
@@ -1480,20 +1483,6 @@ function abrirAjustes() {
   $('#ajustes').classList.remove('oculto');
 }
 $('#abrirAjustes').onclick = abrirAjustes;
-/* Opciones de administrador: se activan tocando 7 veces la línea de la versión */
-let toquesVersion = 0, relojVersion = null;
-$('#version').onclick = () => {
-  clearTimeout(relojVersion);
-  relojVersion = setTimeout(() => { toquesVersion = 0; }, 3000);
-  if (++toquesVersion < 7) return;
-  toquesVersion = 0;
-  ajustes.admin = !ajustes.admin;
-  if (!ajustes.admin) ajustes.conservar = false;
-  guardarAjustes();
-  $('#grupoAdmin').classList.toggle('oculto', !ajustes.admin);
-  $('#intConservar').checked = !!ajustes.conservar;
-  estado(ajustes.admin ? 'Opciones de administrador activadas' : 'Opciones de administrador desactivadas');
-};
 $('#intConservar').onchange = e => { ajustes.conservar = e.target.checked; guardarAjustes(); };
 $('#cerrarAjustes').onclick = () => $('#ajustes').classList.add('oculto');
 
