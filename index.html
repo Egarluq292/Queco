@@ -131,6 +131,17 @@
   }
   .msj.pulsado { transform: scale(.97); }
   .msj.pendiente { opacity: .55; }
+  .msj.con-reac { margin-bottom: 16px; position: relative; }
+  .reac {
+    position: absolute; bottom: -15px; left: 10px; display: flex; gap: 2px; align-items: center;
+    padding: 1px 7px; border-radius: 99px; font-size: 15px; line-height: 22px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--borde); box-shadow: 0 1px 4px rgba(0,0,0,.12); color: var(--texto);
+  }
+  .msj.mio .reac { left: auto; right: 10px; }
+  .reac small { font-size: 12px; color: var(--suave); margin-left: 2px; }
+  .hoja .emojis { display: flex; justify-content: space-between; background: var(--panel); border-radius: 14px; padding: 6px 8px; }
+  .hoja .emojis button { font-size: 26px; padding: 6px; border-radius: 50%; width: 46px; height: 46px; line-height: 1; }
+  .hoja .emojis button.mia { background: var(--borde); }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
   .msj.eliminado .hora { color: var(--error); opacity: 1; }
   .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
@@ -483,6 +494,7 @@
 <!-- Hoja de acciones -->
 <div id="velo" class="velo oculto">
   <div class="hoja">
+    <div class="emojis oculto" id="hojaEmojis"></div>
     <div class="grupoBotones" id="hojaBotones"></div>
     <button class="cancelar" id="hojaCancelar">Cancelar</button>
   </div>
@@ -557,6 +569,8 @@ const mensajes = new Map(); // id → { m, el }
 let temporal = 0, temporalId = 0; // segundos, y mensaje que lo fijó
 let editandoId = null, respondiendoA = null;
 let nuevosSinVer = 0;
+const reacciones = new Map(); // id del mensaje-reacción → { o: id del mensaje, d: dispositivo, e: emoji }
+const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 const aB64 = u8 => {
   let s = '';
@@ -784,7 +798,40 @@ function aplicarCambio(id, m, datos = null, eliminado = false) {
   if (antes) antes.el.replaceWith(el); else insertarOrdenado(el, id);
   if (m.c) $('#lista').querySelector(`.pendiente[data-c="${m.c}"]`)?.remove();
   mensajes.set(id, { m, el, datos: datos ?? antes?.datos ?? null, eliminado });
+  if (reacciones.size) pintarReacciones(id);
 }
+/* Reacciones: cada uno puede dejar una por mensaje; vale la más reciente */
+function reaccionesDe(objetivo) {
+  const porPersona = new Map();
+  for (const [id, r] of [...reacciones].sort((a, b) => a[0] - b[0])) if (r.o === objetivo) porPersona.set(r.d, { id, e: r.e });
+  return porPersona; // dispositivo → { id, e }
+}
+function pintarReacciones(objetivo) {
+  const reg = mensajes.get(objetivo);
+  if (!reg) return;
+  reg.el.querySelector('.reac')?.remove();
+  const lista = [...reaccionesDe(objetivo).values()].map(r => r.e);
+  reg.el.classList.toggle('con-reac', lista.length > 0);
+  if (!lista.length) return;
+  const p = document.createElement('div'); p.className = 'reac';
+  const distintos = [...new Set(lista)];
+  p.textContent = distintos.join('');
+  if (lista.length > 1 && distintos.length === 1) { const s = document.createElement('small'); s.textContent = lista.length; p.append(s); }
+  reg.el.append(p);
+}
+async function reaccionar(objetivo, emoji) {
+  const mia = reaccionesDe(objetivo).get(disp);
+  try {
+    if (mia) { await rpc('borrar', { p_sala: sala, p_id: mia.id, p_adj: null }); reacciones.delete(mia.id); }
+    if (emoji && emoji !== mia?.e) {
+      const id = await enviarMensaje({ k: 'reaccion', o: objetivo, e: emoji });
+      if (Number.isInteger(id)) reacciones.set(id, { o: objetivo, d: disp, e: emoji });
+    }
+    pintarReacciones(objetivo);
+    leer();
+  } catch { estado('No se pudo reaccionar', true); }
+}
+
 function marcarEliminado(el) {
   el.classList.add('eliminado');
   const h = el.querySelector('.hora');
@@ -867,6 +914,7 @@ async function leer() {
       for (const f of filas) {
         ultimaVersion = Math.max(ultimaVersion, f.version);
         let m = null;
+        if (reacciones.has(f.id) && !f.datos) { const o = reacciones.get(f.id).o; reacciones.delete(f.id); pintarReacciones(o); continue; }
         if (f.datos === null && mensajes.has(f.id)) {
           const reg = mensajes.get(f.id);
           // Lo borró quien lo envió: si fue tu colega, se queda en tu móvil marcado en rojo
@@ -876,6 +924,10 @@ async function leer() {
         if (f.datos === '' && mensajes.get(f.id)?.eliminado) quitarBorrado(f.id);
         if (f.datos) {
           m = await descifrar(f.datos);
+          if (m && m.k === 'reaccion') {
+            if (Number.isInteger(m.o) && typeof m.e === 'string' && !(m.x && m.x < Date.now())) { reacciones.set(f.id, { o: m.o, d: m.d, e: m.e }); pintarReacciones(m.o); }
+            continue;
+          }
           if (!m || !(typeof m.t === 'string' || m.k === 'ajuste' || (m.k && Number.isInteger(m.a)))) continue;
           if (m.x && m.x < Date.now()) m = null;
         }
@@ -964,8 +1016,9 @@ async function enviarMensaje(obj) {
   const ttl = obj.k === 'ajuste' ? 0 : temporal;
   const m = { n: yo, d: disp, ts: Date.now(), ...obj };
   if (ttl) m.x = m.ts + ttl * 1000;
-  await rpc('enviar', { p_sala: sala, p_datos: await cifrar(m), p_ttl: ttl || null });
-  if (obj.k !== 'ajuste') avisarAlOtro();
+  const id = await rpc('enviar', { p_sala: sala, p_datos: await cifrar(m), p_ttl: ttl || null });
+  if (obj.k !== 'ajuste' && obj.k !== 'reaccion') avisarAlOtro();
+  return id;
 }
 
 function avisarAlOtro() {
@@ -1322,7 +1375,15 @@ actualizarAccion();
 /* ---------- Hoja de acciones ---------- */
 let hojaAbiertaEn = 0;
 const hojaReciente = () => Date.now() - hojaAbiertaEn < 450;
-function abrirHoja(opciones) {
+function abrirHoja(opciones, { emojis = null } = {}) {
+  const fila = $('#hojaEmojis'); fila.replaceChildren();
+  fila.classList.toggle('oculto', !emojis);
+  if (emojis) for (const e of EMOJIS) {
+    const b = document.createElement('button'); b.textContent = e;
+    if (emojis.actual === e) b.className = 'mia';
+    b.onclick = () => { if (hojaReciente()) return; cerrarHoja(); emojis.elegir(e); };
+    fila.append(b);
+  }
   const cont = $('#hojaBotones'); cont.replaceChildren();
   for (const o of opciones) {
     const b = document.createElement('button'); b.textContent = o.texto;
@@ -1372,6 +1433,8 @@ function menuMensaje(id) {
     texto: 'Quitar de mi móvil', peligro: true,
     accion: () => { quitarBorrado(id); quitarMensaje(id); rehacerSeparadores(); }
   });
+  const miReac = reaccionesDe(id).get(disp);
+  if (miReac && !reg.eliminado) ops.push({ texto: 'Quitar mi reacción ' + miReac.e, accion: () => reaccionar(id, null) });
   if (mio && !reg.eliminado) ops.push({
     texto: 'Eliminar', peligro: true, nota: 'El mensaje se eliminará del servidor.',
     accion: async () => {
@@ -1379,7 +1442,7 @@ function menuMensaje(id) {
       catch { estado('No se pudo eliminar', true); }
     }
   });
-  abrirHoja(ops);
+  abrirHoja(ops, reg.eliminado ? {} : { emojis: { actual: miReac?.e, elegir: e => reaccionar(id, e) } });
 }
 
 function puedeEditar(id) {
@@ -1456,6 +1519,8 @@ function puedeEditar(id) {
       } else estado('Ese mensaje ya no existe');
       return;
     }
+    const pildora = e.target.closest('.reac');
+    if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); hojaAbiertaEn = 0; return; }
     const img = e.target.closest('.foto');
     if (img) abrirVisor(Number(img.closest('.msj').dataset.id));
   }, true);
@@ -1465,7 +1530,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.4';
+const VERSION = '2.5';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -1664,7 +1729,7 @@ function cerrarConversacion() {
   if (editandoId !== null) terminarEdicion();
   terminarRespuesta(); ocultarNuevos();
   limpiarCache();
-  mensajes.clear();
+  mensajes.clear(); reacciones.clear();
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
   clave = crudoActual = sala = null;
   ultimaVersion = 0; temporal = 0; temporalId = 0;
@@ -1687,7 +1752,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function entrarCon(crudo, salaId, nombre) {
-  limpiarCache(); mensajes.clear();
+  limpiarCache(); mensajes.clear(); reacciones.clear();
   crudoActual = crudo;
   clave = await importarClave(crudo); sala = salaId; yo = nombre;
   ultimaVersion = 0; temporal = 0; temporalId = 0;
