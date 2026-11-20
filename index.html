@@ -1100,7 +1100,9 @@ $('#camDisparar').onclick = () => {
   if (!v.videoWidth) return;
   const c = document.createElement('canvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
+  const ctx = c.getContext('2d');
+  if (!mirandoAtras) { ctx.translate(c.width, 0); ctx.scale(-1, 1); } // selfi en espejo, como se ve en pantalla
+  ctx.drawImage(v, 0, 0);
   fotoBase = c; giroFoto = giroSegunSensor();
   cerrarFlujo(); pintarPrevia(); modoPrevia(true);
 };
@@ -1463,7 +1465,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.3';
+const VERSION = '2.4';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
