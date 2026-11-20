@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src data: blob:; media-src blob:; base-uri 'none'; form-action 'none'">
-<meta name="theme-color" content="#0f3d3e">
-<title>Susurro</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src 'self' data: blob:; media-src blob:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#3b4752">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Preferencias">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Preferencias</title>
 <style>
   :root {
     --fondo: #f4f2ee; --panel: #ffffff; --texto: #1d1d1b; --suave: #77756f;
@@ -42,9 +49,9 @@
   }
   .logo {
     width: 56px; height: 56px; margin: 0 auto; border-radius: 16px;
-    background: var(--acento); display: grid; place-items: center;
+    background: linear-gradient(#5b6b7a, #3b4752); display: grid; place-items: center;
   }
-  .logo svg { width: 26px; height: 26px; fill: var(--acento-txt); }
+  .logo svg { width: 30px; height: 30px; }
   h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
   .lema { color: var(--suave); font-size: 14px; margin-top: -10px; }
   .campo { display: grid; gap: 6px; text-align: left; }
@@ -152,9 +159,9 @@
 <!-- Pantalla de entrada -->
 <main id="entrada">
   <form class="tarjeta" id="formEntrada" autocomplete="off">
-    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 1a5 5 0 0 0-5 5v4H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm-3 9V6a3 3 0 0 1 6 0v4H9Z"/></svg></div>
-    <h1>Susurro</h1>
-    <p class="lema">Mensajes cifrados entre dos personas</p>
+    <div class="logo"><svg viewBox="0 0 24 24" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M6 4v16M12 4v16M18 4v16"/><circle cx="6" cy="9" r="2.2" fill="#46535f"/><circle cx="12" cy="15" r="2.2" fill="#46535f"/><circle cx="18" cy="9" r="2.2" fill="#46535f"/></svg></div>
+    <h1>Preferencias</h1>
+    <p class="lema">Introduce tus datos para continuar</p>
 
     <div class="campo">
       <label for="nombre">Tu nombre</label>
@@ -162,7 +169,7 @@
     </div>
 
     <div class="campo">
-      <label for="frase">Frase secreta compartida</label>
+      <label for="frase">Código de acceso</label>
       <div class="fila">
         <input type="password" id="frase" required autocapitalize="off" autocorrect="off" spellcheck="false">
         <button type="button" class="mini" id="ver">Ver</button>
@@ -174,8 +181,8 @@
     <button class="principal" id="entrar">Entrar</button>
     <p class="error" id="errorEntrada"></p>
 
-    <button type="button" class="enlace" id="generar">Generar una frase nueva</button>
-    <p class="nota">La frase no sale nunca de tu móvil. Compártela en persona, nunca por otra app.</p>
+    <button type="button" class="enlace" id="generar">Generar un código nuevo</button>
+    <p class="nota">El código no sale nunca de tu móvil. Compártelo en persona, nunca por otra app.</p>
   </form>
 </main>
 
@@ -183,7 +190,7 @@
 <section id="chat" class="oculto">
   <header>
     <button class="enlace izq" id="salir">Salir</button>
-    <div class="titulo">Susurro<small id="estado">Cifrado de extremo a extremo</small></div>
+    <div class="titulo">Preferencias<small id="estado">Sincronizado</small></div>
     <button class="enlace der" id="vaciarBtn">Vaciar</button>
   </header>
   <div id="lista"><p class="vacio" id="vacio">Aún no hay mensajes.</p></div>
@@ -347,7 +354,7 @@ async function leer() {
         if (m && (typeof m.t === 'string' || (m.k && Number.isInteger(m.a)))) pintar(m);
       }
     } while (filas.length === 200);
-    estado('Cifrado de extremo a extremo');
+    estado('Sincronizado');
   } catch { estado('Sin conexión con el servidor', true); }
   leyendo = false;
 }
@@ -375,13 +382,13 @@ $('#ver').onclick = () => {
 
 $('#generar').onclick = () => {
   $('#frase').value = generarFrase(); $('#frase').type = 'text'; $('#ver').textContent = 'Ocultar';
-  $('#errorEntrada').textContent = 'Apúntala en papel y dásela a tu colega en persona.';
+  $('#errorEntrada').textContent = 'Apúntalo en papel y dáselo a tu colega en persona.';
 };
 
 $('#formEntrada').onsubmit = async e => {
   e.preventDefault();
   const nombre = $('#nombre').value.trim(), frase = $('#frase').value;
-  if (normalizar(frase).length < 20) { $('#errorEntrada').textContent = 'La frase debe tener al menos 20 caracteres.'; return; }
+  if (normalizar(frase).length < 20) { $('#errorEntrada').textContent = 'El código debe tener al menos 20 caracteres.'; return; }
   if (SUPABASE_URL.includes('TU-PROYECTO')) { $('#errorEntrada').textContent = 'Falta configurar Supabase en el código.'; return; }
   const btn = $('#entrar'); btn.disabled = true; btn.textContent = 'Generando clave…';
   $('#errorEntrada').textContent = '';
@@ -565,6 +572,8 @@ $('#vaciarBtn').onclick = async () => {
 };
 
 /* ---------- Inicio ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 (async () => {
   try {
     const g = JSON.parse(localStorage.getItem(ALMACEN) || 'null');
