@@ -138,6 +138,9 @@
     background: var(--panel); border: 1px solid var(--borde); box-shadow: 0 1px 4px rgba(0,0,0,.12); color: var(--texto);
   }
   .msj.mio .reac { left: auto; right: 10px; }
+  .hora .check { margin-left: 4px; letter-spacing: -3px; }
+  .hora .check.visto { color: #7cc4ff; opacity: 1; }
+  .msj:not(.mio) .hora .check.visto { color: #2f8fd8; }
   .reac small { font-size: 12px; color: var(--suave); margin-left: 2px; }
   .hoja .emojis { display: flex; justify-content: space-between; background: var(--panel); border-radius: 14px; padding: 6px 8px; }
   .hoja .emojis button { font-size: 26px; padding: 6px; border-radius: 50%; width: 46px; height: 46px; line-height: 1; }
@@ -571,6 +574,8 @@ let editandoId = null, respondiendoA = null;
 let nuevosSinVer = 0;
 const reacciones = new Map(); // id del mensaje-reacción → { o: id del mensaje, d: dispositivo, e: emoji }
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+/* «Visto»: el móvil de tu colega avisa de hasta dónde ha leído; solo el administrador lo ve */
+let vistoHasta = 0, miVisto = { id: 0, u: 0 };
 
 const aB64 = u8 => {
   let s = '';
@@ -746,6 +751,7 @@ function crearElemento(id, m) {
   }
   const h = document.createElement('div'); h.className = 'hora';
   h.textContent = (m.e ? 'editado · ' : '') + fmtHora(m.ts);
+  if (mio && id && esAdmin()) { const c = document.createElement('span'); c.className = 'check'; h.append(c); }
   b.append(h);
   return b;
 }
@@ -800,6 +806,36 @@ function aplicarCambio(id, m, datos = null, eliminado = false) {
   mensajes.set(id, { m, el, datos: datos ?? antes?.datos ?? null, eliminado });
   if (reacciones.size) pintarReacciones(id);
 }
+function pintarVistos() {
+  if (!esAdmin()) return;
+  for (const [id, reg] of mensajes) {
+    const c = reg.el.querySelector('.hora .check');
+    if (!c) continue;
+    const visto = id <= vistoHasta;
+    c.textContent = visto ? '✓✓' : '✓';
+    c.classList.toggle('visto', visto);
+    c.title = visto ? 'Visto' : 'Enviado';
+  }
+}
+let informando = false;
+async function informarVisto() {
+  if (esAdmin() || informando || !clave) return;
+  if (document.visibilityState !== 'visible' || $('#chat').classList.contains('oculto') || !$('#portada').classList.contains('oculto')) return;
+  const l = $('#lista');
+  if (l.scrollHeight - l.scrollTop - l.clientHeight > 80) return;
+  let max = 0;
+  for (const [id, { m }] of mensajes) if (m.d !== disp && id > max) max = id;
+  if (max <= miVisto.u) return;
+  informando = true;
+  try {
+    const anterior = miVisto.id;
+    const id = await enviarMensaje({ k: 'visto', u: max });
+    miVisto = { id, u: max };
+    if (anterior) rpc('borrar', { p_sala: sala, p_id: anterior, p_adj: null }).catch(() => {});
+  } catch {}
+  informando = false;
+}
+
 /* Reacciones: cada uno puede dejar una por mensaje; vale la más reciente */
 function reaccionesDe(objetivo) {
   const porPersona = new Map();
@@ -924,6 +960,13 @@ async function leer() {
         if (f.datos === '' && mensajes.get(f.id)?.eliminado) quitarBorrado(f.id);
         if (f.datos) {
           m = await descifrar(f.datos);
+          if (m && m.k === 'visto') {
+            if (Number.isInteger(m.u)) {
+              if (m.d === disp) { if (m.u >= miVisto.u) miVisto = { id: f.id, u: m.u }; }
+              else if (m.u > vistoHasta) { vistoHasta = m.u; cambios = true; }
+            }
+            continue;
+          }
           if (m && m.k === 'reaccion') {
             if (Number.isInteger(m.o) && typeof m.e === 'string' && !(m.x && m.x < Date.now())) { reacciones.set(f.id, { o: m.o, d: m.d, e: m.e }); pintarReacciones(m.o); }
             continue;
@@ -939,13 +982,14 @@ async function leer() {
       }
     } while (filas.length === 200);
     if (cambios) {
-      rehacerSeparadores(); recalcularTemporal();
+      rehacerSeparadores(); recalcularTemporal(); pintarVistos();
       if (abajo || propio) { lista.scrollTop = lista.scrollHeight; ocultarNuevos(); }
       else if (ajenosNuevos) { nuevosSinVer += ajenosNuevos; mostrarNuevos(); }
     }
     estado('Sincronizado');
   } catch { estado('Sin conexión con el servidor', true); }
   leyendo = false;
+  informarVisto();
 }
 
 /* Globito de mensajes nuevos cuando estás leyendo más arriba */
@@ -957,7 +1001,7 @@ function ocultarNuevos() { nuevosSinVer = 0; $('#nuevos').classList.add('oculto'
 $('#nuevos').onclick = () => { const l = $('#lista'); l.scrollTo({ top: l.scrollHeight, behavior: 'smooth' }); ocultarNuevos(); };
 $('#lista').addEventListener('scroll', () => {
   const l = $('#lista');
-  if (nuevosSinVer && l.scrollHeight - l.scrollTop - l.clientHeight < 80) ocultarNuevos();
+  if (l.scrollHeight - l.scrollTop - l.clientHeight < 80) { if (nuevosSinVer) ocultarNuevos(); informarVisto(); }
 }, { passive: true });
 
 function arrancarSondeo() {
@@ -1013,11 +1057,11 @@ async function guardarAdjunto(m) {
 
 /* ---------- Enviar ---------- */
 async function enviarMensaje(obj) {
-  const ttl = obj.k === 'ajuste' ? 0 : temporal;
+  const ttl = obj.k === 'ajuste' || obj.k === 'visto' ? 0 : temporal;
   const m = { n: yo, d: disp, ts: Date.now(), ...obj };
   if (ttl) m.x = m.ts + ttl * 1000;
   const id = await rpc('enviar', { p_sala: sala, p_datos: await cifrar(m), p_ttl: ttl || null });
-  if (obj.k !== 'ajuste' && obj.k !== 'reaccion') avisarAlOtro();
+  if (!['ajuste', 'reaccion', 'visto'].includes(obj.k)) avisarAlOtro();
   return id;
 }
 
@@ -1530,7 +1574,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.5';
+const VERSION = '2.6';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -1753,6 +1797,7 @@ document.addEventListener('visibilitychange', () => {
 
 async function entrarCon(crudo, salaId, nombre) {
   limpiarCache(); mensajes.clear(); reacciones.clear();
+  vistoHasta = 0; miVisto = { id: 0, u: 0 };
   crudoActual = crudo;
   clave = await importarClave(crudo); sala = salaId; yo = nombre;
   ultimaVersion = 0; temporal = 0; temporalId = 0;
@@ -1911,6 +1956,7 @@ function mostrarChat() {
   $('#chat').classList.remove('oculto');
   history.pushState({ chat: 1 }, '');
   const l = $('#lista'); l.scrollTop = l.scrollHeight;
+  informarVisto();
 }
 async function abrirSecreto() {
   navigator.vibrate?.(20);
