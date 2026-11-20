@@ -131,6 +131,8 @@
   }
   .msj.pulsado { transform: scale(.97); }
   .msj.pendiente { opacity: .55; }
+  .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
+  .msj.eliminado .hora { color: var(--error); opacity: 1; }
   .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
   .msj strong { font-weight: 700; }
   .msj code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; }
@@ -281,8 +283,33 @@
   .botonFila.peligro { color: var(--error); }
   .grupo .botonFila + .botonFila { border-top: 1px solid var(--borde); }
 
+  /* Portada */
+  #portada { position: fixed; inset: 0; z-index: 12; background: var(--fondo); display: grid; grid-template-rows: auto 1fr; }
+  .pCabecera { display: flex; align-items: center; gap: 4px; padding: calc(18px + env(safe-area-inset-top)) 16px 10px; }
+  .pCabecera h1 { font-size: 30px; font-weight: 600; padding-left: 4px; }
+  .pCabecera.sub h1 { font-size: 22px; }
+  .pCuerpo { overflow-y: auto; padding: 4px 16px calc(32px + env(safe-area-inset-bottom)); display: grid; gap: 14px; align-content: start; }
+  .pBuscar {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 99px;
+    background: var(--panel); border: 1px solid var(--borde); color: var(--suave); font-size: 15px;
+  }
+  .pBuscar svg { width: 20px; height: 20px; fill: none; stroke: var(--suave); stroke-width: 2; }
+  .pFila {
+    display: flex; align-items: center; gap: 14px; padding: 14px 16px; width: 100%;
+    background: none; border: 0; text-align: left; cursor: pointer; min-height: 64px;
+  }
+  .grupo .pFila + .pFila { border-top: 1px solid var(--borde); }
+  .pFila:active { background: rgba(127,127,127,.1); }
+  .pIco { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .pIco svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .pTxt { flex: 1; min-width: 0; }
+  .pTxt b { display: block; font-weight: 500; font-size: 16px; }
+  .pTxt span { display: block; font-size: 13px; color: var(--suave); }
+  .pBarra { height: 8px; border-radius: 4px; background: var(--borde); overflow: hidden; margin-top: 8px; }
+  .pBarra i { display: block; height: 100%; background: var(--acento); border-radius: 4px; }
+
   /* Bloqueo con PIN */
-  #bloqueo, #cortina { position: fixed; inset: 0; z-index: 50; background: var(--fondo); display: grid; place-items: center; padding: 24px; }
+  #bloqueo { position: fixed; inset: 0; z-index: 50; background: var(--fondo); display: grid; place-items: center; padding: 24px; }
   .pinCaja { display: grid; gap: 18px; justify-items: center; width: 100%; max-width: 300px; text-align: center; }
   #pinTitulo { font-size: 18px; font-weight: 600; }
   .puntos { display: flex; gap: 16px; }
@@ -300,7 +327,16 @@
 <body>
 
 <!-- Pantalla de entrada -->
-<main id="entrada">
+<!-- Portada: parece una app de ajustes. Se entra tocando 5 veces «Versión» en «Acerca de» -->
+<section id="portada">
+  <header class="pCabecera">
+    <button class="icono oculto" id="pAtras" aria-label="Atrás"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 14 3.2 5.2 12l8.8 8.8 1.4-1.4L8 12z"/></svg></button>
+    <h1 id="pTitulo">Preferencias</h1>
+  </header>
+  <div class="pCuerpo" id="pCuerpo"></div>
+</section>
+
+<main id="entrada" class="oculto">
   <form class="tarjeta" id="formEntrada" autocomplete="off">
     <div class="logo"><svg viewBox="0 0 24 24" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M6 4v16M12 4v16M18 4v16"/><circle cx="6" cy="9" r="2.2" fill="#46535f"/><circle cx="12" cy="15" r="2.2" fill="#46535f"/><circle cx="18" cy="9" r="2.2" fill="#46535f"/></svg></div>
     <h1>Preferencias</h1>
@@ -483,7 +519,7 @@
     <button class="enlace" id="pinOlvido">¿Has olvidado el PIN?</button>
   </div>
 </div>
-<div id="cortina" class="oculto"><div class="logo"><svg viewBox="0 0 24 24" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M6 4v16M12 4v16M18 4v16"/><circle cx="6" cy="9" r="2.2" fill="#46535f"/><circle cx="12" cy="15" r="2.2" fill="#46535f"/><circle cx="18" cy="9" r="2.2" fill="#46535f"/></svg></div></div>
+
 
 <script>
 'use strict';
@@ -726,13 +762,64 @@ function quitarMensaje(id) {
   mensajes.delete(id);
 }
 
-function aplicarCambio(id, m) {
+function aplicarCambio(id, m, datos = null, eliminado = false) {
   const antes = mensajes.get(id);
   if (!m) { quitarMensaje(id); return; }
   const el = crearElemento(id, m);
+  if (eliminado) marcarEliminado(el);
   if (antes) antes.el.replaceWith(el); else insertarOrdenado(el, id);
   if (m.c) $('#lista').querySelector(`.pendiente[data-c="${m.c}"]`)?.remove();
-  mensajes.set(id, { m, el });
+  mensajes.set(id, { m, el, datos: datos ?? antes?.datos ?? null, eliminado });
+}
+function marcarEliminado(el) {
+  el.classList.add('eliminado');
+  const h = el.querySelector('.hora');
+  if (h) h.textContent = 'eliminado · ' + h.textContent.replace(/^editado · /, '');
+}
+
+/* Mensajes que borra tu colega: se guardan en este móvil, tal cual llegaron (cifrados) */
+let bdLocal = null;
+function abrirBD() {
+  if (bdLocal) return bdLocal;
+  bdLocal = new Promise((res, rej) => {
+    const r = indexedDB.open('preferencias', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('borrados', { keyPath: ['sala', 'id'] });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return bdLocal;
+}
+async function bd(modo, fn) {
+  const db = await abrirBD();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('borrados', modo);
+    const r = fn(tx.objectStore('borrados'));
+    tx.oncomplete = () => res(r?.result);
+    tx.onerror = () => rej(tx.error);
+  });
+}
+const guardarBorrado = reg => bd('readwrite', s => s.put(reg)).catch(() => {});
+const quitarBorrado = id => bd('readwrite', s => s.delete([sala, id])).catch(() => {});
+const vaciarBorrados = () => bd('readwrite', s => s.delete(IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]))).catch(() => {});
+async function cargarBorrados() {
+  let lista = [];
+  try { lista = await bd('readonly', s => s.getAll(IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]))) || []; } catch {}
+  for (const r of lista) {
+    const m = await descifrar(r.datos);
+    if (!m) continue;
+    if (r.adj && m.a) adjGuardados.set(m.a, r.adj);
+    aplicarCambio(r.id, m, r.datos, true);
+  }
+  if (lista.length) rehacerSeparadores();
+}
+async function conservarBorrado(id) {
+  const reg = mensajes.get(id);
+  if (!reg?.datos) { quitarMensaje(id); return; }
+  let adj = null;
+  if (reg.m.a) { const r = await cacheAdj.get(reg.m.a); adj = r?.b64 || null; if (adj) adjGuardados.set(reg.m.a, adj); }
+  await guardarBorrado({ sala, id, datos: reg.datos, adj });
+  reg.eliminado = true;
+  marcarEliminado(reg.el);
 }
 
 /* Quita de la pantalla los temporales caducados (el servidor los borra al leer) */
@@ -766,6 +853,13 @@ async function leer() {
       for (const f of filas) {
         ultimaVersion = Math.max(ultimaVersion, f.version);
         let m = null;
+        if (f.datos === null && mensajes.has(f.id)) {
+          const reg = mensajes.get(f.id);
+          // Lo borró quien lo envió: si fue tu colega, se queda en tu móvil marcado en rojo
+          if (reg.m.d !== disp && !reg.eliminado && !(reg.m.x && reg.m.x < Date.now())) { await conservarBorrado(f.id); cambios = true; continue; }
+          if (reg.eliminado) continue;
+        }
+        if (f.datos === '' && mensajes.get(f.id)?.eliminado) quitarBorrado(f.id);
         if (f.datos) {
           m = await descifrar(f.datos);
           if (!m || !(typeof m.t === 'string' || m.k === 'ajuste' || (m.k && Number.isInteger(m.a)))) continue;
@@ -773,7 +867,7 @@ async function leer() {
         }
         if (!m && !mensajes.has(f.id)) continue;
         const esNuevo = !!m && !mensajes.has(f.id);
-        aplicarCambio(f.id, m); cambios = true;
+        aplicarCambio(f.id, m, f.datos || null); cambios = true;
         if (m && m.d === disp) propio = true;
         else if (esNuevo && primeraCarga === false) ajenosNuevos++;
       }
@@ -806,16 +900,17 @@ function arrancarSondeo() {
 }
 
 /* ---------- Adjuntos ---------- */
-const cacheAdj = new Map(); // id → Promise<{url, blob}|null>
+const cacheAdj = new Map(); // id → Promise<{url, blob, b64}|null>
+const adjGuardados = new Map(); // id → base64 cifrado de adjuntos de mensajes conservados
 function cargarAdjunto(id, mime) {
   if (!cacheAdj.has(id)) cacheAdj.set(id, (async () => {
     try {
-      const b64 = await rpc('bajar', { p_sala: sala, p_id: id });
+      const b64 = adjGuardados.get(id) || await rpc('bajar', { p_sala: sala, p_id: id });
       if (!b64) return null;
       const u = await descifrarBytes(deB64(b64), ':adj');
       if (!u) return null;
       const blob = new Blob([u], { type: mime || '' });
-      return { url: URL.createObjectURL(blob), blob };
+      return { url: URL.createObjectURL(blob), blob, b64 };
     } catch { cacheAdj.delete(id); return null; }
   })());
   return cacheAdj.get(id);
@@ -825,6 +920,7 @@ function liberarAdjunto(id) {
   if (p) { p.then(r => r && URL.revokeObjectURL(r.url)); cacheAdj.delete(id); }
 }
 function limpiarCache() {
+  adjGuardados.clear();
   for (const p of cacheAdj.values()) p.then(r => r && URL.revokeObjectURL(r.url));
   cacheAdj.clear();
 }
@@ -838,6 +934,8 @@ async function guardarAdjunto(m) {
   const sello = `${f.getFullYear()}${String(f.getMonth() + 1).padStart(2, '0')}${String(f.getDate()).padStart(2, '0')}-${String(f.getHours()).padStart(2, '0')}${String(f.getMinutes()).padStart(2, '0')}`;
   const nombre = `${m.k}-${sello}.${ext}`;
   const archivo = new File([r.blob], nombre, { type: m.m });
+  selectorAbierto = true;
+  setTimeout(() => { if (document.visibilityState === 'visible') selectorAbierto = false; }, 4000);
   if (ES_IOS && navigator.canShare?.({ files: [archivo] })) {
     try { await navigator.share({ files: [archivo] }); } catch {}
     return;
@@ -943,7 +1041,7 @@ function girarLienzo(fuente, w, h, grados) {
 }
 
 async function abrirCamara() {
-  if (!navigator.mediaDevices?.getUserMedia) { $('#archivoCamara').click(); return; }
+  if (!navigator.mediaDevices?.getUserMedia) { selectorAbierto = true; $('#archivoCamara').click(); return; }
   cerrarFlujo();
   try {
     flujoCam = await navigator.mediaDevices.getUserMedia({
@@ -1010,7 +1108,7 @@ const menuFoto = $('#menuFoto');
 $('#adjuntar').onclick = e => { e.stopPropagation(); menuFoto.classList.toggle('oculto'); };
 document.addEventListener('click', e => { if (!menuFoto.contains(e.target)) menuFoto.classList.add('oculto'); });
 $('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); pedirSensor(); abrirCamara(); };
-$('#opGaleria').onclick = () => { menuFoto.classList.add('oculto'); $('#archivoGaleria').click(); };
+$('#opGaleria').onclick = () => { menuFoto.classList.add('oculto'); selectorAbierto = true; $('#archivoGaleria').click(); };
 
 async function fotoElegida(input) {
   const f = input.files[0]; input.value = '';
@@ -1206,23 +1304,32 @@ $('#texto').addEventListener('input', ajustar);
 actualizarAccion();
 
 /* ---------- Hoja de acciones ---------- */
+let hojaAbiertaEn = 0;
+const hojaReciente = () => Date.now() - hojaAbiertaEn < 450;
 function abrirHoja(opciones) {
   const cont = $('#hojaBotones'); cont.replaceChildren();
   for (const o of opciones) {
     const b = document.createElement('button'); b.textContent = o.texto;
     if (o.peligro) b.className = 'peligro';
-    b.onclick = () => { cerrarHoja(); o.accion(); };
+    b.onclick = async () => {
+      if (hojaReciente()) return;
+      cerrarHoja();
+      if (o.nota && !await confirmar(o.nota, o.texto)) return;
+      o.accion();
+    };
     cont.append(b);
   }
+  hojaAbiertaEn = Date.now();
   $('#velo').classList.remove('oculto');
 }
 function cerrarHoja() { $('#velo').classList.add('oculto'); }
-$('#hojaCancelar').onclick = cerrarHoja;
-$('#velo').onclick = e => { if (e.target.id === 'velo') cerrarHoja(); };
+$('#hojaCancelar').onclick = () => { if (!hojaReciente()) cerrarHoja(); };
+$('#velo').onclick = e => { if (e.target.id === 'velo' && !hojaReciente()) cerrarHoja(); };
 
 function confirmar(texto, boton) {
   return new Promise(res => {
     abrirHoja([{ texto: boton, peligro: true, accion: () => res(true) }]);
+    hojaAbiertaEn = 0;
     const t = document.createElement('div');
     t.style.cssText = 'padding:14px 16px;font-size:13px;color:var(--suave);text-align:center';
     t.textContent = texto;
@@ -1238,14 +1345,19 @@ function menuMensaje(id) {
   if (!reg) return;
   const { m } = reg; const mio = m.d === disp;
   const ops = [{ texto: 'Responder', accion: () => empezarRespuesta(id) }];
+  if (reg.eliminado) ops.shift(); // no se responde a un mensaje eliminado
   if (!m.k || m.k === 'texto') {
     ops.push({ texto: 'Copiar', accion: () => navigator.clipboard?.writeText(m.t).then(() => estado('Copiado')).catch(() => {}) });
-    if (mio) ops.push({ texto: 'Editar', accion: () => empezarEdicion(id) });
+    if (mio && !reg.eliminado) ops.push({ texto: 'Editar', accion: () => empezarEdicion(id) });
   } else {
     ops.push({ texto: m.k === 'foto' ? 'Guardar foto en el móvil' : 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
   }
-  if (mio) ops.push({
-    texto: 'Eliminar para los dos', peligro: true,
+  if (reg.eliminado) ops.push({
+    texto: 'Quitar de mi móvil', peligro: true,
+    accion: () => { quitarBorrado(id); quitarMensaje(id); rehacerSeparadores(); }
+  });
+  if (mio && !reg.eliminado) ops.push({
+    texto: 'Eliminar', peligro: true, nota: 'Desaparecerá de tu móvil. Tu colega lo seguirá viendo, marcado como eliminado.',
     accion: async () => {
       try { await borrarMensaje(id); if (editandoId === id) terminarEdicion(); await leer(); }
       catch { estado('No se pudo eliminar', true); }
@@ -1255,8 +1367,8 @@ function menuMensaje(id) {
 }
 
 function puedeEditar(id) {
-  const m = mensajes.get(id)?.m;
-  return !!m && m.d === disp && (!m.k || m.k === 'texto');
+  const reg = mensajes.get(id), m = reg?.m;
+  return !!m && !reg.eliminado && m.d === disp && (!m.k || m.k === 'texto');
 }
 /* Gestos: mantener pulsado = menú; deslizar a la derecha = responder; a la izquierda = editar */
 (() => {
@@ -1337,7 +1449,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.1';
+const VERSION = '2.2';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -1375,6 +1487,7 @@ $('#vaciarBtn').onclick = async () => {
   try {
     const t = temporal;
     await rpc('vaciar', { p_sala: sala });
+    await vaciarBorrados();
     await leer();
     if (t) { await enviarMensaje({ k: 'ajuste', v: t }); await leer(); }
     $('#ajustes').classList.add('oculto');
@@ -1447,12 +1560,12 @@ let pinBuffer = '', pinResolver = null;
 function pintarPuntos() {
   document.querySelectorAll('.puntos i').forEach((p, i) => p.classList.toggle('lleno', i < pinBuffer.length));
 }
-function pedirPin(titulo, { cancelable = false, error = '' } = {}) {
+function pedirPin(titulo, { cancelable = false, error = '', olvido = false } = {}) {
   pinBuffer = ''; pintarPuntos();
   $('#pinTitulo').textContent = titulo;
   $('#pinError').textContent = error;
   $('#pinIzq').textContent = cancelable ? 'Cancelar' : '';
-  $('#pinOlvido').classList.toggle('oculto', cancelable);
+  $('#pinOlvido').classList.toggle('oculto', !olvido);
   $('#bloqueo').classList.remove('oculto');
   return new Promise(res => { pinResolver = res; });
 }
@@ -1504,15 +1617,15 @@ async function desbloquear() {
   let intentos = 0, error = '';
   while (true) {
     const s = leerSesion();
-    if (!s?.kc) return;
-    const p = await pedirPin('Introduce tu PIN', { error });
-    if (p === null) return;
+    if (!s?.kc) return false;
+    const p = await pedirPin('Introduce tu PIN', { error, cancelable: true, olvido: true });
+    if (p === null) return false;
     const crudo = await descifrarCon(await clavePin(p, deB64(s.ps)), deB64(s.kc), 'pin');
     if (crudo) {
       $('#bloqueo').classList.add('oculto');
       $('#nombre').value = s.n;
       await entrarCon(crudo, s.s, s.n);
-      return;
+      return true;
     }
     intentos++;
     if (intentos >= 5) {
@@ -1520,7 +1633,7 @@ async function desbloquear() {
       $('#bloqueo').classList.add('oculto');
       $('#entrada').classList.remove('oculto');
       $('#errorEntrada').textContent = 'Demasiados intentos. Vuelve a entrar con el código de acceso.';
-      return;
+      return false;
     }
     error = `PIN incorrecto. Te quedan ${5 - intentos} intentos.`;
   }
@@ -1540,15 +1653,16 @@ function cerrarConversacion() {
   $('#ajustes').classList.add('oculto');
 }
 
-/* Al salir de la app con PIN: se tapa enseguida y, pasados 30 s, se bloquea */
-let ocultoDesde = 0;
+/* Al salir de la app se vuelve a la portada; con PIN, pasados 30 s hay que volver a ponerlo.
+   Al elegir una foto de la galería o guardar algo, el móvil sale un momento de la app: eso no cuenta. */
+let ocultoDesde = 0, selectorAbierto = false;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     ocultoDesde = Date.now();
-    if (pinActivo() && clave) $('#cortina').classList.remove('oculto');
-  } else if (pinActivo() && clave) {
-    if (Date.now() - ocultoDesde > 30000) { $('#cortina').classList.add('oculto'); cerrarConversacion(); desbloquear(); }
-    else $('#cortina').classList.add('oculto');
+    if (!selectorAbierto) mostrarPortada();
+  } else {
+    if (selectorAbierto) selectorAbierto = false;
+    else if (pinActivo() && clave && Date.now() - ocultoDesde > 30000) cerrarConversacion();
   }
   arrancarSondeo();
 });
@@ -1560,6 +1674,7 @@ async function entrarCon(crudo, salaId, nombre) {
   ultimaVersion = 0; temporal = 0; temporalId = 0;
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
   $('#entrada').classList.add('oculto'); $('#chat').classList.remove('oculto');
+  await cargarBorrados();
   arrancarSondeo();
   if (ajustes.notif) suscribirse(false).catch(() => {});
 }
@@ -1594,20 +1709,152 @@ $('#salir').onclick = async () => {
   ajustes.notif = false; guardarAjustes();
   localStorage.removeItem(ALMACEN);
   cerrarConversacion();
-  $('#entrada').classList.remove('oculto');
+  mostrarPortada();
 };
+
+/* ---------- Portada ---------- */
+const ICONOS = {
+  pantalla: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  sonido: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+  notif: '<path d="M6 16V10a6 6 0 0 1 12 0v6l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  bateria: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4M6 10h7v4H6z"/>',
+  almacen: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+  privacidad: '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6z"/><path d="m9 12 2 2 4-4"/>',
+  acerca: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'
+};
+const COLORES = { pantalla: '#e0a43a', sonido: '#4f8fd6', notif: '#d9644e', bateria: '#4caf7a', almacen: '#8b6fd1', privacidad: '#3f9fa0', acerca: '#7d8a96' };
+const PAGINAS = {
+  inicio: { titulo: 'Preferencias', buscar: true, grupos: [
+    [{ ic: 'pantalla', t: 'Pantalla', s: 'Brillo, modo oscuro, tamaño de letra', ir: 'pantalla' },
+     { ic: 'sonido', t: 'Sonido y vibración', s: 'Volumen, tonos, vibración', ir: 'sonido' },
+     { ic: 'notif', t: 'Notificaciones', s: 'Historial, no molestar', ir: 'notif' }],
+    [{ ic: 'bateria', t: 'Batería', s: 'Ahorro de energía', ir: 'bateria' },
+     { ic: 'almacen', t: 'Almacenamiento', s: '38 % usado', ir: 'almacen' }],
+    [{ ic: 'privacidad', t: 'Privacidad', s: 'Permisos y actividad', ir: 'privacidad' },
+     { ic: 'acerca', t: 'Acerca de', s: 'Versión 2.4.1', ir: 'acerca' }]
+  ] },
+  pantalla: { titulo: 'Pantalla', grupos: [
+    [{ t: 'Modo oscuro', sw: 'oscuro' }, { t: 'Brillo adaptable', sw: 'brillo', def: true }, { t: 'Filtro de luz azul', sw: 'luz' }],
+    [{ t: 'Tiempo de espera de la pantalla', s: '30 segundos' }, { t: 'Tamaño de fuente', s: 'Predeterminado' }]
+  ] },
+  sonido: { titulo: 'Sonido y vibración', grupos: [
+    [{ t: 'Vibrar al sonar', sw: 'vibrar', def: true }, { t: 'Sonidos al tocar', sw: 'toques' }, { t: 'Sonido de bloqueo', sw: 'bloqueoSnd', def: true }],
+    [{ t: 'Tono de llamada', s: 'Predeterminado' }, { t: 'Sonido de notificación', s: 'Predeterminado' }]
+  ] },
+  notif: { titulo: 'Notificaciones', grupos: [
+    [{ t: 'No molestar', sw: 'nomolestar' }, { t: 'Mostrar en la pantalla de bloqueo', sw: 'pbloqueo', def: true }, { t: 'Historial de notificaciones', sw: 'historial' }]
+  ] },
+  bateria: { titulo: 'Batería', grupos: [
+    [{ t: 'Ahorro de batería', sw: 'ahorro' }, { t: 'Batería adaptable', sw: 'adaptable', def: true }, { t: 'Mostrar porcentaje', sw: 'porcentaje', def: true }]
+  ] },
+  almacen: { titulo: 'Almacenamiento', grupos: [
+    [{ t: 'Espacio usado', s: '24,4 GB de 64 GB', barra: 38 }],
+    [{ t: 'Liberar espacio automáticamente', sw: 'liberar' }, { t: 'Archivos temporales', s: '312 MB' }]
+  ] },
+  privacidad: { titulo: 'Privacidad', grupos: [
+    [{ t: 'Gestor de permisos', s: 'Cámara, micrófono, ubicación' }, { t: 'Mostrar contraseñas', sw: 'contras' }, { t: 'Uso compartido de diagnósticos', sw: 'diag' }]
+  ] },
+  acerca: { titulo: 'Acerca de', grupos: [
+    [{ t: 'Nombre del dispositivo', s: 'Mi teléfono' }, { t: 'Versión', s: '2.4.1', secreto: true }, { t: 'Compilación', s: 'PRF.241120.001' }],
+    [{ t: 'Buscar actualizaciones', s: 'El sistema está actualizado' }]
+  ] }
+};
+const falsos = JSON.parse(localStorage.getItem('susurro.portada') || '{}');
+let toquesSecretos = 0, relojSecreto = null;
+
+function pintarPagina(nombre) {
+  const pg = PAGINAS[nombre];
+  $('#pTitulo').textContent = pg.titulo;
+  $('#pAtras').classList.toggle('oculto', nombre === 'inicio');
+  $('.pCabecera').classList.toggle('sub', nombre !== 'inicio');
+  const cuerpo = $('#pCuerpo'); cuerpo.replaceChildren();
+  if (pg.buscar) {
+    const b = document.createElement('div'); b.className = 'pBuscar';
+    b.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>Buscar en los ajustes';
+    cuerpo.append(b);
+  }
+  for (const grupo of pg.grupos) {
+    const g = document.createElement('div'); g.className = 'grupo';
+    for (const f of grupo) {
+      const fila = document.createElement(f.sw ? 'label' : 'button'); fila.className = 'pFila';
+      if (f.ic) {
+        const ic = document.createElement('span'); ic.className = 'pIco'; ic.style.background = COLORES[f.ic];
+        ic.innerHTML = `<svg viewBox="0 0 24 24">${ICONOS[f.ic]}</svg>`;
+        fila.append(ic);
+      }
+      const tx = document.createElement('span'); tx.className = 'pTxt';
+      const b = document.createElement('b'); b.textContent = f.t; tx.append(b);
+      if (f.s) { const s = document.createElement('span'); s.textContent = f.s; tx.append(s); }
+      if (f.barra) { const br = document.createElement('div'); br.className = 'pBarra'; br.innerHTML = `<i style="width:${f.barra}%"></i>`; tx.append(br); }
+      fila.append(tx);
+      if (f.sw) {
+        const sw = document.createElement('span'); sw.className = 'interruptor';
+        const inp = document.createElement('input'); inp.type = 'checkbox';
+        inp.checked = f.sw === 'oscuro' ? document.documentElement.dataset.tema === 'oscuro' : (falsos[f.sw] ?? !!f.def);
+        inp.onchange = () => {
+          if (f.sw === 'oscuro') { ajustes.tema = inp.checked ? 'oscuro' : 'claro'; guardarAjustes(); aplicarApariencia(); }
+          else { falsos[f.sw] = inp.checked; localStorage.setItem('susurro.portada', JSON.stringify(falsos)); }
+        };
+        const sl = document.createElement('span');
+        sw.append(inp, sl); fila.append(sw);
+      }
+      if (f.ir) fila.onclick = () => { history.pushState({ p: f.ir }, ''); pintarPagina(f.ir); };
+      if (f.secreto) fila.onclick = () => {
+        clearTimeout(relojSecreto);
+        relojSecreto = setTimeout(() => { toquesSecretos = 0; }, 3000);
+        if (++toquesSecretos >= 5) { toquesSecretos = 0; abrirSecreto(); }
+      };
+      g.append(fila);
+    }
+    cuerpo.append(g);
+  }
+  cuerpo.scrollTop = 0;
+  paginaPortada = nombre;
+}
+let paginaPortada = 'inicio';
+$('#pAtras').onclick = () => history.back();
+
+function mostrarPortada() {
+  cerrarCamara(); cerrarVisor(); cerrarHoja();
+  menuFoto.classList.add('oculto');
+  for (const s of ['#chat', '#ajustes', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
+  if (pinResolver) terminarPin(null);
+  pintarPagina('inicio');
+  $('#portada').classList.remove('oculto');
+}
+function mostrarChat() {
+  $('#portada').classList.add('oculto');
+  $('#chat').classList.remove('oculto');
+  history.pushState({ chat: 1 }, '');
+  const l = $('#lista'); l.scrollTop = l.scrollHeight;
+}
+async function abrirSecreto() {
+  navigator.vibrate?.(20);
+  if (clave) { mostrarChat(); return; }
+  const s = leerSesion();
+  $('#portada').classList.add('oculto');
+  if (s?.kc) { history.pushState({ chat: 1 }, ''); const ok = await desbloquear(); if (!ok && !clave && $('#entrada').classList.contains('oculto')) mostrarPortada(); return; }
+  if (s?.k) {
+    try { await entrarCon(deB64(s.k), s.s, s.n); history.pushState({ chat: 1 }, ''); }
+    catch { localStorage.removeItem(ALMACEN); $('#entrada').classList.remove('oculto'); }
+    return;
+  }
+  history.pushState({ chat: 1 }, '');
+  $('#entrada').classList.remove('oculto');
+}
+/* Botón o gesto «atrás» del móvil: vuelve a la portada */
+window.addEventListener('popstate', () => {
+  if (!$('#portada').classList.contains('oculto')) { if (paginaPortada !== 'inicio') pintarPagina('inicio'); return; }
+  if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
+  if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
+  mostrarPortada();
+});
 
 /* ---------- Inicio ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-(async () => {
-  const s = leerSesion();
-  if (!s) return;
-  $('#nombre').value = s.n || '';
-  if (s.kc) { $('#entrada').classList.add('oculto'); await desbloquear(); return; }
-  try { await entrarCon(deB64(s.k), s.s, s.n); }
-  catch { localStorage.removeItem(ALMACEN); }
-})();
+$('#nombre').value = leerSesion()?.n || '';
+mostrarPortada();
 </script>
 </body>
 </html>

@@ -66,18 +66,20 @@ drop function if exists public.enviar(text, text, integer);
 drop function if exists public.subir(text, text);
 drop function if exists public.subir(text, text, integer);
 
--- Cambios desde una versión: mensajes nuevos, editados y borrados (datos nulo)
+-- Cambios desde una versión: mensajes nuevos, editados y borrados.
+-- datos nulo = lo borró quien lo envió (el otro lo conserva en su móvil);
+-- datos vacío = caducado o conversación vaciada (desaparece para los dos).
 create function public.leer(p_sala text, p_desde bigint)
 returns table (id bigint, version bigint, datos text)
 language plpgsql security definer set search_path = public as $$
 begin
   -- Mensajes temporales caducados: se borran de verdad
-  update mensajes m set datos = null, caduca = null, cambiado = now(),
+  update mensajes m set datos = '', caduca = null, cambiado = now(),
          version = nextval('mensajes_version')
-   where m.sala = p_sala and m.caduca < now() and m.datos is not null;
+   where m.sala = p_sala and m.caduca < now() and m.datos <> '';
   delete from adjuntos a where a.sala = p_sala and a.caduca < now();
   -- Marcas de borrado antiguas: ya no hacen falta
-  delete from mensajes m where m.sala = p_sala and m.datos is null and m.cambiado < now() - interval '30 days';
+  delete from mensajes m where m.sala = p_sala and (m.datos is null or m.datos = '') and m.cambiado < now() - interval '30 days';
 
   return query
     select m.id, m.version, m.datos from mensajes m
@@ -129,7 +131,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if length(p_datos) > 24000 then raise exception 'petición no válida'; end if;
   update mensajes set datos = p_datos, cambiado = now(), version = nextval('mensajes_version')
-   where sala = p_sala and id = p_id and datos is not null;
+   where sala = p_sala and id = p_id and datos <> '';
 end $$;
 
 create or replace function public.borrar(p_sala text, p_id bigint, p_adj bigint default null)
@@ -137,7 +139,7 @@ returns void
 language plpgsql security definer set search_path = public as $$
 begin
   update mensajes set datos = null, caduca = null, cambiado = now(), version = nextval('mensajes_version')
-   where sala = p_sala and id = p_id and datos is not null;
+   where sala = p_sala and id = p_id and datos <> '';
   if p_adj is not null then
     delete from adjuntos where sala = p_sala and id = p_adj;
   end if;
@@ -147,8 +149,8 @@ create or replace function public.vaciar(p_sala text)
 returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  update mensajes set datos = null, caduca = null, cambiado = now(), version = nextval('mensajes_version')
-   where sala = p_sala and datos is not null;
+  update mensajes set datos = '', caduca = null, cambiado = now(), version = nextval('mensajes_version')
+   where sala = p_sala and (datos is null or datos <> '');
   delete from adjuntos where sala = p_sala;
 end $$;
 
