@@ -55,6 +55,10 @@ create table if not exists public.configuracion (
 alter table public.configuracion enable row level security;
 revoke all on public.configuracion from anon, authenticated;
 
+-- El servicio de avisos (Edge Function) usa el rol interno service_role
+grant select, insert, update, delete on public.suscripciones to service_role;
+grant select, insert, update, delete on public.configuracion to service_role;
+
 -- ===== Funciones (se borran las versiones antiguas) =====
 drop function if exists public.leer(text, bigint);
 drop function if exists public.enviar(text, text);
