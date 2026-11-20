@@ -575,7 +575,7 @@ if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorag
 const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
 const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajustes));
 /* Administrador: el móvil cuyo identificador está en esta lista (se ve en Ajustes, abajo del todo) */
-const ADMIN_DISPOSITIVOS = [];
+const ADMIN_DISPOSITIVOS = ['ee23-f250'];
 const idCorto = () => disp.slice(0, 4) + '-' + disp.slice(4, 8);
 const esAdmin = () => ADMIN_DISPOSITIVOS.includes(idCorto());
 function aplicarApariencia() {
@@ -1463,7 +1463,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.2';
+const VERSION = '2.3';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
