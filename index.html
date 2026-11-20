@@ -1069,14 +1069,38 @@ function avisarAlOtro() {
   funcionAvisar({ accion: 'avisar', sala, disp }).catch(() => {});
 }
 
+/* Fotos y audios: se ven al momento en el chat mientras se suben */
 async function enviarAdjunto(blob, k, extra) {
-  estado(k === 'foto' ? 'Enviando foto…' : 'Enviando audio…');
+  const c = aHex(crypto.getRandomValues(new Uint8Array(6)));
+  const url = URL.createObjectURL(blob);
+  const provisional = document.createElement('div');
+  provisional.className = 'msj mio pendiente' + (k === 'foto' ? ' con-foto' : '');
+  provisional.dataset.c = c;
+  if (k === 'foto') {
+    const img = document.createElement('img'); img.className = 'foto'; img.src = url; img.alt = 'Foto';
+    if (extra.w && extra.h) { img.width = extra.w; img.height = extra.h; }
+    provisional.append(img);
+  } else {
+    const au = document.createElement('audio'); au.controls = true; au.src = url; provisional.append(au);
+  }
+  const hora = document.createElement('div'); hora.className = 'hora'; hora.textContent = 'Enviando…';
+  provisional.append(hora);
+  const lista = $('#lista');
+  lista.append(provisional); $('#vacio').classList.add('oculto');
+  lista.scrollTop = lista.scrollHeight; ocultarNuevos();
   try {
     const u8 = new Uint8Array(await blob.arrayBuffer());
-    const id = await rpc('subir', { p_sala: sala, p_datos: aB64(await cifrarBytes(u8, ':adj')), p_ttl: temporal || null });
-    await enviarMensaje({ k, a: id, m: blob.type, ...extra });
+    const b64 = aB64(await cifrarBytes(u8, ':adj'));
+    const id = await rpc('subir', { p_sala: sala, p_datos: b64, p_ttl: temporal || null });
+    cacheAdj.set(id, Promise.resolve({ url, blob, b64 })); // no hace falta volver a descargarla
+    await enviarMensaje({ k, a: id, m: blob.type, c, ...extra });
     await leer();
-  } catch { estado('No se pudo enviar', true); }
+  } catch {
+    provisional.classList.add('fallido');
+    hora.textContent = 'No enviado · toca para quitarlo';
+    provisional.onclick = () => { provisional.remove(); URL.revokeObjectURL(url); };
+    estado('No se pudo enviar', true);
+  }
 }
 
 async function editarMensaje(id, texto) {
@@ -1574,7 +1598,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '2.7';
+const VERSION = '2.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
