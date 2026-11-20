@@ -695,9 +695,8 @@ function previa(m) {
 }
 function crearCita(r) {
   const c = document.createElement('div'); c.className = 'cita'; c.dataset.ref = r.i;
-  const b = document.createElement('b'); b.textContent = r.d === disp ? 'Tú' : r.n;
   const s = document.createElement('span'); s.textContent = r.p;
-  c.append(b, s);
+  c.append(s);
   return c;
 }
 
@@ -1229,7 +1228,7 @@ function empezarRespuesta(id) {
   if (!reg) return;
   if (editandoId !== null) terminarEdicion();
   respondiendoA = id;
-  mostrarContexto(reg.m.d === disp ? 'Respondiendo a tu mensaje' : 'Respondiendo a ' + reg.m.n, previa(reg.m));
+  mostrarContexto('Respondiendo', previa(reg.m));
   $('#texto').focus();
 }
 function cerrarContexto() { $('#barraContexto').classList.add('oculto'); }
@@ -1244,7 +1243,7 @@ $('#ctxCerrar').onclick = () => { if (editandoId !== null) terminarEdicion(); el
 /* Datos de la cita: van cifrados dentro del mensaje */
 function datosRespuesta() {
   const reg = respondiendoA !== null && mensajes.get(respondiendoA);
-  return reg ? { i: respondiendoA, n: reg.m.n, d: reg.m.d, p: previa(reg.m) } : undefined;
+  return reg ? { i: respondiendoA, p: previa(reg.m) } : undefined;
 }
 
 async function enviar() {
