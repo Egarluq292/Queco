@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src 'self' data: blob:; media-src blob: mediastream:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
@@ -13,22 +14,24 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Preferencias">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Preferencias</title>
 <style>
   :root {
     --fondo: #f4f2ee; --panel: #ffffff; --texto: #1d1d1b; --suave: #77756f;
     --borde: #e2dfd8; --acento: #0f3d3e; --acento-txt: #ffffff;
     --burbuja: #ffffff; --mia: #0f3d3e; --mia-txt: #f4f2ee; --error: #a33a2b;
-    --escala: 1;
+    --escala: 1; color-scheme: light;
   }
   :root[data-tema="oscuro"] {
+    color-scheme: dark;
     --fondo: #121413; --panel: #1b1e1d; --texto: #ecebe7; --suave: #8f938f;
     --borde: #2a2e2c; --acento: #5fb3a6; --acento-txt: #0d1211;
     --burbuja: #1f2322; --mia: #2c6b63; --mia-txt: #f1f4f2; --error: #e07a6a;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-tema="claro"]) {
+      color-scheme: dark;
       --fondo: #121413; --panel: #1b1e1d; --texto: #ecebe7; --suave: #8f938f;
       --borde: #2a2e2c; --acento: #5fb3a6; --acento-txt: #0d1211;
       --burbuja: #1f2322; --mia: #2c6b63; --mia-txt: #f1f4f2; --error: #e07a6a;
@@ -36,6 +39,7 @@
   }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; }
+  html { background: var(--fondo); }
   body {
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: var(--fondo); color: var(--texto);
@@ -96,6 +100,7 @@
   }
   .icono svg { width: 24px; height: 24px; fill: var(--acento); }
   #lista {
+    contain: strict; overscroll-behavior: contain;
     overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 6px;
     font-size: calc(16px * var(--escala));
   }
@@ -109,24 +114,60 @@
     background: var(--burbuja); border: 1px solid var(--borde);
     align-self: flex-start; white-space: pre-wrap; word-wrap: break-word;
     -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
-    transition: transform .12s;
+    touch-action: pan-y; transition: transform .12s; will-change: transform;
   }
   .msj.pulsado { transform: scale(.97); }
+  .msj.pendiente { opacity: .55; }
+  .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
+  .msj strong { font-weight: 700; }
+  .msj code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; }
+  .msj .bloque { display: block; white-space: pre-wrap; background: rgba(127,127,127,.15); padding: 6px 8px; border-radius: 8px; margin: 2px 0; }
+  .cita {
+    border-left: 3px solid var(--acento); background: rgba(127,127,127,.12); border-radius: 8px;
+    padding: 4px 8px; margin: 2px 0 4px; font-size: .86em; cursor: pointer;
+  }
+  .msj.mio .cita { border-left-color: var(--mia-txt); background: rgba(255,255,255,.14); }
+  .cita b { display: block; font-size: .92em; }
+  .cita span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: .85; white-space: normal; }
+  .destello { animation: destello 1.4s; }
+  @keyframes destello { 0%, 45% { box-shadow: 0 0 0 3px var(--acento); } 100% { box-shadow: 0 0 0 0 transparent; } }
   .msj.mio { align-self: flex-end; background: var(--mia); color: var(--mia-txt); border-color: transparent; }
   .msj .autor { font-size: 12px; font-weight: 600; color: var(--acento); margin-bottom: 1px; }
   .msj .hora { font-size: 11px; opacity: .65; text-align: right; margin-top: 2px; }
   .vacio { margin: auto; color: var(--suave); font-size: 14px; text-align: center; }
-  #pie { background: var(--panel); border-top: 1px solid var(--borde); }
-  .barra { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
-  #barraEdicion {
-    display: flex; align-items: center; gap: 10px; padding: 8px 14px 0;
-    font-size: 13px; color: var(--acento); font-weight: 600;
+  #pie { background: var(--panel); border-top: 1px solid var(--borde); position: relative; }
+  #nuevos {
+    position: absolute; right: 14px; bottom: calc(100% + 12px); z-index: 4;
+    width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--borde);
+    background: var(--panel); box-shadow: 0 4px 14px rgba(0,0,0,.18); cursor: pointer;
+    display: grid; place-items: center;
   }
-  #barraEdicion span { flex: 1; }
+  #nuevos svg { width: 22px; height: 22px; fill: var(--acento); }
+  #nuevos b {
+    position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px;
+    border-radius: 10px; background: var(--acento); color: var(--acento-txt);
+    font-size: 11.5px; line-height: 20px; text-align: center;
+  }
+  #formato { padding: 8px 12px 0; }
+  #formato .segmentos button:nth-child(1) { font-weight: 700; }
+  #formato .segmentos button:nth-child(2) { font-style: italic; }
+  #formato .segmentos button:nth-child(3) { text-decoration: line-through; }
+  #formato .segmentos button:nth-child(4) { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .barra { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  #barraContexto {
+    display: flex; align-items: center; gap: 10px; margin: 8px 12px 0; padding: 6px 4px 6px 12px;
+    border-left: 3px solid var(--acento); background: var(--fondo); border-radius: 8px;
+  }
+  #barraContexto .ctx { flex: 1; min-width: 0; font-size: 13px; }
+  #barraContexto .ctx b { display: block; color: var(--acento); }
+  #barraContexto .ctx span { display: block; color: var(--suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #barraContexto .icono { width: 36px; height: 36px; }
+  #barraContexto .icono svg { width: 18px; height: 18px; }
   textarea {
     flex: 1; resize: none; max-height: 140px; padding: 10px 14px;
     border-radius: 20px; border: 1px solid var(--borde); background: var(--fondo); outline: none;
     font-size: calc(16px * var(--escala));
+    field-sizing: content; min-height: 44px;
   }
   .redondo {
     width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0;
@@ -278,7 +319,14 @@
   </header>
   <div id="lista"><p class="vacio" id="vacio">Aún no hay mensajes.</p></div>
   <div id="pie">
-    <div id="barraEdicion" class="oculto"><span>Editando mensaje</span><button class="enlace" id="cancelarEdicion">Cancelar</button></div>
+    <button id="nuevos" class="oculto" aria-label="Ir a los mensajes nuevos"><svg viewBox="0 0 24 24"><path d="M11 4h2v12.2l5.3-5.3 1.4 1.4L12 20l-7.7-7.7 1.4-1.4 5.3 5.3z"/></svg><b id="nuevosNum">1</b></button>
+    <div id="formato" class="oculto">
+      <div class="segmentos"><button data-m="*">Negrita</button><button data-m="_">Cursiva</button><button data-m="~">Tachado</button><button data-m="```">Monoespacio</button></div>
+    </div>
+    <div id="barraContexto" class="oculto">
+      <div class="ctx"><b id="ctxTitulo"></b><span id="ctxPrevia"></span></div>
+      <button class="icono" id="ctxCerrar" aria-label="Cancelar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    </div>
     <div class="barra" id="barraNormal">
       <button class="redondo claro" id="adjuntar" aria-label="Foto"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
       <input type="file" id="archivoCamara" accept="image/*" capture="environment" class="oculto">
@@ -442,7 +490,8 @@ let clave = null, crudoActual = null, sala = null, yo = null;
 let ultimaVersion = 0, temporizador = null, leyendo = false;
 const mensajes = new Map(); // id → { m, el }
 let temporal = 0, temporalId = 0; // segundos, y mensaje que lo fijó
-let editandoId = null;
+let editandoId = null, respondiendoA = null;
+let nuevosSinVer = 0;
 
 const aB64 = u8 => {
   let s = '';
@@ -544,6 +593,41 @@ function textoAjuste(m) {
     : `${quien} desactivado los mensajes temporales.`;
 }
 
+/* Formato como en WhatsApp: *negrita*, _cursiva_, ~tachado~, ```monoespacio``` y `código` */
+const BORDE = '\\s.,;:!?¡¿()"\'«»\\-';
+const RE_FORMATO = new RegExp('```([\\s\\S]+?)```|(^|[' + BORDE + '])([*_~])(?=\\S)([^\\n]*?\\S)\\3(?=$|[' + BORDE + '])|`([^`\\n]+)`', 'g');
+const ETIQUETA = { '*': 'strong', '_': 'em', '~': 's' };
+function formatear(t, prof = 0) {
+  const frag = document.createDocumentFragment();
+  if (prof > 4) { frag.append(t); return frag; }
+  const re = new RegExp(RE_FORMATO.source, 'g');
+  let i = 0, m;
+  while ((m = re.exec(t))) {
+    let el, prefijo = '';
+    if (m[1] !== undefined) { el = document.createElement('code'); el.className = 'bloque'; el.textContent = m[1].replace(/^\n|\n$/g, ''); }
+    else if (m[3]) { prefijo = m[2]; el = document.createElement(ETIQUETA[m[3]]); el.append(formatear(m[4], prof + 1)); }
+    else { el = document.createElement('code'); el.textContent = m[5]; }
+    frag.append(t.slice(i, m.index) + prefijo, el);
+    i = re.lastIndex;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  frag.append(t.slice(i));
+  return frag;
+}
+const sinMarcas = t => t.replace(/```|[*_~`]/g, '');
+function previa(m) {
+  if (m.k === 'foto') return '📷 Foto';
+  if (m.k === 'audio') return '🎤 Audio';
+  return sinMarcas(m.t || '').slice(0, 140);
+}
+function crearCita(r) {
+  const c = document.createElement('div'); c.className = 'cita'; c.dataset.ref = r.i;
+  const b = document.createElement('b'); b.textContent = r.d === disp ? 'Tú' : r.n;
+  const s = document.createElement('span'); s.textContent = r.p;
+  c.append(b, s);
+  return c;
+}
+
 function crearElemento(id, m) {
   if (m.k === 'ajuste') {
     const a = document.createElement('div');
@@ -556,6 +640,7 @@ function crearElemento(id, m) {
   b.className = 'msj' + (mio ? ' mio' : '');
   b.dataset.id = id; b.dataset.ts = m.ts;
   if (!mio) { const a = document.createElement('div'); a.className = 'autor'; a.textContent = m.n; b.append(a); }
+  if (m.r && m.r.i) b.append(crearCita(m.r));
   if (m.k === 'foto') {
     b.classList.add('con-foto');
     const img = document.createElement('img'); img.className = 'foto'; img.alt = 'Foto'; img.draggable = false;
@@ -572,7 +657,7 @@ function crearElemento(id, m) {
       c.replaceWith(au);
     });
   } else {
-    const t = document.createElement('div'); t.textContent = m.t; b.append(t);
+    const t = document.createElement('div'); t.append(formatear(m.t)); b.append(t);
   }
   const h = document.createElement('div'); h.className = 'hora';
   h.textContent = (m.e ? 'editado · ' : '') + fmtHora(m.ts);
@@ -625,6 +710,7 @@ function aplicarCambio(id, m) {
   if (!m) { quitarMensaje(id); return; }
   const el = crearElemento(id, m);
   if (antes) antes.el.replaceWith(el); else insertarOrdenado(el, id);
+  if (m.c) $('#lista').querySelector(`.pendiente[data-c="${m.c}"]`)?.remove();
   mensajes.set(id, { m, el });
 }
 
@@ -646,7 +732,8 @@ async function leer() {
   try {
     const lista = $('#lista');
     const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 80;
-    let filas, cambios = false, propio = false;
+    let filas, cambios = false, propio = false, ajenosNuevos = 0;
+    const primeraCarga = ultimaVersion === 0;
     do {
       filas = await rpc('leer', { p_sala: sala, p_desde: ultimaVersion });
       for (const f of filas) {
@@ -658,18 +745,33 @@ async function leer() {
           if (m.x && m.x < Date.now()) m = null;
         }
         if (!m && !mensajes.has(f.id)) continue;
+        const esNuevo = !!m && !mensajes.has(f.id);
         aplicarCambio(f.id, m); cambios = true;
         if (m && m.d === disp) propio = true;
+        else if (esNuevo && primeraCarga === false) ajenosNuevos++;
       }
     } while (filas.length === 200);
     if (cambios) {
       rehacerSeparadores(); recalcularTemporal();
-      if (abajo || propio) lista.scrollTop = lista.scrollHeight;
+      if (abajo || propio) { lista.scrollTop = lista.scrollHeight; ocultarNuevos(); }
+      else if (ajenosNuevos) { nuevosSinVer += ajenosNuevos; mostrarNuevos(); }
     }
     estado('Sincronizado');
   } catch { estado('Sin conexión con el servidor', true); }
   leyendo = false;
 }
+
+/* Globito de mensajes nuevos cuando estás leyendo más arriba */
+function mostrarNuevos() {
+  $('#nuevosNum').textContent = nuevosSinVer > 99 ? '99+' : nuevosSinVer;
+  $('#nuevos').classList.remove('oculto');
+}
+function ocultarNuevos() { nuevosSinVer = 0; $('#nuevos').classList.add('oculto'); }
+$('#nuevos').onclick = () => { const l = $('#lista'); l.scrollTo({ top: l.scrollHeight, behavior: 'smooth' }); ocultarNuevos(); };
+$('#lista').addEventListener('scroll', () => {
+  const l = $('#lista');
+  if (nuevosSinVer && l.scrollHeight - l.scrollTop - l.clientHeight < 80) ocultarNuevos();
+}, { passive: true });
 
 function arrancarSondeo() {
   clearInterval(temporizador);
@@ -969,41 +1071,110 @@ function actualizarAccion() {
   $('#accion').innerHTML = hay ? ICONO_ENVIAR : ICONO_MICRO;
   $('#accion').setAttribute('aria-label', hay ? 'Enviar' : 'Grabar audio');
 }
+function mostrarContexto(titulo, texto) {
+  $('#ctxTitulo').textContent = titulo; $('#ctxPrevia').textContent = texto;
+  $('#barraContexto').classList.remove('oculto');
+}
 function empezarEdicion(id) {
   const reg = mensajes.get(id);
   if (!reg) return;
+  respondiendoA = null;
   editandoId = id;
-  $('#barraEdicion').classList.remove('oculto');
+  mostrarContexto('Editando mensaje', previa(reg.m));
   $('#adjuntar').disabled = true;
   $('#texto').value = reg.m.t; ajustar(); $('#texto').focus();
 }
+function empezarRespuesta(id) {
+  const reg = mensajes.get(id);
+  if (!reg) return;
+  if (editandoId !== null) terminarEdicion();
+  respondiendoA = id;
+  mostrarContexto(reg.m.d === disp ? 'Respondiendo a tu mensaje' : 'Respondiendo a ' + reg.m.n, previa(reg.m));
+  $('#texto').focus();
+}
+function cerrarContexto() { $('#barraContexto').classList.add('oculto'); }
 function terminarEdicion() {
   editandoId = null;
-  $('#barraEdicion').classList.add('oculto');
+  cerrarContexto();
   $('#adjuntar').disabled = false;
   $('#texto').value = ''; ajustar();
 }
-$('#cancelarEdicion').onclick = terminarEdicion;
+function terminarRespuesta() { respondiendoA = null; if (editandoId === null) cerrarContexto(); }
+$('#ctxCerrar').onclick = () => { if (editandoId !== null) terminarEdicion(); else terminarRespuesta(); };
+/* Datos de la cita: van cifrados dentro del mensaje */
+function datosRespuesta() {
+  const reg = respondiendoA !== null && mensajes.get(respondiendoA);
+  return reg ? { i: respondiendoA, n: reg.m.n, d: reg.m.d, p: previa(reg.m) } : undefined;
+}
 
 async function enviar() {
-  const txt = $('#texto').value.trim();
+  const t = $('#texto');
+  const txt = t.value.trim();
   if (!txt) return;
-  const btn = $('#accion'); btn.disabled = true;
+  if (editandoId !== null) {
+    const id = editandoId, reg = mensajes.get(id);
+    terminarEdicion();
+    if (!reg) return;
+    aplicarCambio(id, { ...reg.m, t: txt, e: 1 }); // se ve al momento
+    try { await editarMensaje(id, txt); } catch { estado('No se pudo editar', true); }
+    leer();
+    return;
+  }
+  // Envío al instante: se pinta ya y se confirma cuando responde el servidor
+  const c = aHex(crypto.getRandomValues(new Uint8Array(6)));
+  const r = datosRespuesta();
+  const provisional = crearElemento(0, { n: yo, d: disp, ts: Date.now(), t: txt, r });
+  provisional.removeAttribute('data-id');
+  provisional.classList.add('pendiente'); provisional.dataset.c = c;
+  const lista = $('#lista');
+  lista.append(provisional); $('#vacio').classList.add('oculto');
+  lista.scrollTop = lista.scrollHeight; ocultarNuevos();
+  t.value = ''; ajustar(); terminarRespuesta();
   try {
-    if (editandoId !== null) { await editarMensaje(editandoId, txt); terminarEdicion(); }
-    else { await enviarMensaje({ t: txt }); $('#texto').value = ''; ajustar(); }
-    await leer();
-  } catch { estado('No se pudo enviar', true); }
-  btn.disabled = false; $('#texto').focus();
+    await enviarMensaje({ t: txt, c, ...(r ? { r } : {}) });
+    leer();
+  } catch {
+    provisional.classList.add('fallido');
+    provisional.querySelector('.hora').textContent = 'No enviado · toca para reintentar';
+    provisional.onclick = () => { provisional.remove(); t.value = txt; ajustar(); t.focus(); };
+    estado('No se pudo enviar', true);
+  }
 }
 $('#accion').onclick = () => ($('#texto').value.trim() || editandoId !== null) ? enviar() : empezarGrabacion();
+/* Que el teclado no se cierre al pulsar enviar */
+for (const sel of ['#accion', '#ctxCerrar', '#formato']) {
+  $(sel).addEventListener('mousedown', e => { if (document.activeElement === $('#texto')) e.preventDefault(); });
+}
 $('#texto').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); enviar(); }
 });
+const AUTO_ALTURA = CSS.supports?.('field-sizing', 'content');
 function ajustar() {
-  const t = $('#texto'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px';
+  if (!AUTO_ALTURA) { const t = $('#texto'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
   actualizarAccion();
 }
+
+/* Barra de formato: aparece al seleccionar texto */
+function revisarSeleccion() {
+  const t = $('#texto');
+  const hay = document.activeElement === t && t.selectionStart !== t.selectionEnd;
+  $('#formato').classList.toggle('oculto', !hay);
+}
+['select', 'keyup', 'pointerup', 'input', 'blur'].forEach(ev => $('#texto').addEventListener(ev, () => setTimeout(revisarSeleccion, 0)));
+document.addEventListener('selectionchange', revisarSeleccion);
+$('#formato').onclick = e => {
+  const marca = e.target.dataset?.m; if (!marca) return;
+  const t = $('#texto'); const a = t.selectionStart, b = t.selectionEnd;
+  if (a === b) return;
+  const s = t.value.slice(a, b), sel = s.trim();
+  if (!sel) return;
+  const pre = t.value.slice(0, a + (s.length - s.trimStart().length));
+  const post = t.value.slice(b - (s.length - s.trimEnd().length));
+  t.value = pre + marca + sel + marca + post;
+  t.focus();
+  t.setSelectionRange(pre.length + marca.length, pre.length + marca.length + sel.length);
+  ajustar();
+};
 $('#texto').addEventListener('input', ajustar);
 actualizarAccion();
 
@@ -1039,7 +1210,7 @@ function menuMensaje(id) {
   const reg = mensajes.get(id);
   if (!reg) return;
   const { m } = reg; const mio = m.d === disp;
-  const ops = [];
+  const ops = [{ texto: 'Responder', accion: () => empezarRespuesta(id) }];
   if (!m.k || m.k === 'texto') {
     ops.push({ texto: 'Copiar', accion: () => navigator.clipboard?.writeText(m.t).then(() => estado('Copiado')).catch(() => {}) });
     if (mio) ops.push({ texto: 'Editar', accion: () => empezarEdicion(id) });
@@ -1056,34 +1227,80 @@ function menuMensaje(id) {
   abrirHoja(ops);
 }
 
+function puedeEditar(id) {
+  const m = mensajes.get(id)?.m;
+  return !!m && m.d === disp && (!m.k || m.k === 'texto');
+}
+/* Gestos: mantener pulsado = menú; deslizar a la derecha = responder; a la izquierda = editar */
 (() => {
   const lista = $('#lista');
-  let reloj = null, inicio = null, burbuja = null, largo = false;
-  const cancelar = () => { clearTimeout(reloj); reloj = null; burbuja?.classList.remove('pulsado'); };
+  const UMBRAL = 64;
+  let reloj = null, inicio = null, burbuja = null, largo = false, modo = null, dx = 0, avisado = false, arrastrado = false;
+  const pararReloj = () => { clearTimeout(reloj); reloj = null; burbuja?.classList.remove('pulsado'); };
+  const soltar = () => {
+    if (burbuja) { burbuja.style.transition = 'transform .18s'; burbuja.style.transform = ''; burbuja.classList.remove('pulsado'); }
+    burbuja = null; inicio = null; modo = null; dx = 0; avisado = false;
+  };
   lista.addEventListener('pointerdown', e => {
     const b = e.target.closest('.msj');
-    if (!b) return;
-    largo = false; burbuja = b; inicio = { x: e.clientX, y: e.clientY };
+    if (!b || !b.dataset.id) return;
+    largo = false; arrastrado = false; burbuja = b; inicio = { x: e.clientX, y: e.clientY }; modo = null; dx = 0;
+    b.style.transition = 'transform .12s';
     b.classList.add('pulsado');
     reloj = setTimeout(() => {
-      largo = true; cancelar();
+      largo = true; pararReloj();
       navigator.vibrate?.(15);
       menuMensaje(Number(b.dataset.id));
+      soltar();
     }, 480);
   });
   lista.addEventListener('pointermove', e => {
-    if (reloj && inicio && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) > 10) cancelar();
+    if (!burbuja || !inicio) return;
+    const mx = e.clientX - inicio.x, my = e.clientY - inicio.y;
+    if (!modo && Math.hypot(mx, my) > 10) {
+      pararReloj();
+      modo = Math.abs(mx) > Math.abs(my) * 1.2 ? 'h' : 'v';
+      if (modo === 'h') { burbuja.style.transition = 'none'; try { burbuja.setPointerCapture(e.pointerId); } catch {} }
+    }
+    if (modo !== 'h') return;
+    arrastrado = true;
+    const id = Number(burbuja.dataset.id);
+    const minimo = puedeEditar(id) ? -90 : -18;
+    dx = Math.max(Math.min(mx, 90), minimo);
+    burbuja.style.transform = `translateX(${dx}px)`;
+    const listo = dx >= UMBRAL || (dx <= -UMBRAL && puedeEditar(id));
+    if (listo && !avisado) { avisado = true; navigator.vibrate?.(10); }
+    if (!listo) avisado = false;
   });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => lista.addEventListener(t, cancelar));
-  lista.addEventListener('scroll', cancelar, { passive: true });
+  const fin = () => {
+    pararReloj();
+    if (burbuja && modo === 'h') {
+      const id = Number(burbuja.dataset.id);
+      if (dx >= UMBRAL) empezarRespuesta(id);
+      else if (dx <= -UMBRAL && puedeEditar(id)) empezarEdicion(id);
+    }
+    soltar();
+  };
+  lista.addEventListener('pointerup', fin);
+  lista.addEventListener('pointercancel', fin);
+  lista.addEventListener('scroll', () => { if (modo !== 'h') pararReloj(); }, { passive: true });
   lista.addEventListener('contextmenu', e => {
     const b = e.target.closest('.msj');
-    if (!b) return;
+    if (!b || !b.dataset.id) return;
     e.preventDefault();
-    if (!largo) { cancelar(); largo = true; menuMensaje(Number(b.dataset.id)); }
+    if (!largo) { pararReloj(); largo = true; menuMensaje(Number(b.dataset.id)); soltar(); }
   });
   lista.addEventListener('click', e => {
-    if (largo) { e.preventDefault(); largo = false; return; }
+    if (largo || arrastrado) { e.preventDefault(); e.stopPropagation(); largo = false; arrastrado = false; return; }
+    const cita = e.target.closest('.cita');
+    if (cita) {
+      const destino = mensajes.get(Number(cita.dataset.ref))?.el;
+      if (destino) {
+        destino.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        destino.classList.remove('destello'); void destino.offsetWidth; destino.classList.add('destello');
+      } else estado('Ese mensaje ya no existe');
+      return;
+    }
     const img = e.target.closest('.foto');
     if (img) abrirVisor(Number(img.closest('.msj').dataset.id));
   }, true);
@@ -1279,6 +1496,7 @@ function cerrarConversacion() {
   clearInterval(temporizador);
   cerrarCamara(); cerrarVisor(); cerrarHoja();
   if (editandoId !== null) terminarEdicion();
+  terminarRespuesta(); ocultarNuevos();
   limpiarCache();
   mensajes.clear();
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
