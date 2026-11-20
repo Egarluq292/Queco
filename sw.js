@@ -1,7 +1,7 @@
 // Susurro · service worker mínimo
 // Solo guarda la propia app (no los mensajes) para poder abrirla sin red.
 // Siempre intenta la red primero, así las actualizaciones llegan solas.
-const CACHE = 'susurro-v4';
+const CACHE = 'susurro-v5';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icono-192.png', './icono-512.png'];
 
 self.addEventListener('install', e => {
@@ -18,7 +18,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Supabase: sin tocar
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(r => { const copia = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copia)); return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
   );

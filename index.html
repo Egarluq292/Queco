@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src 'self' data: blob:; media-src blob:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src 'self' data: blob:; media-src blob: mediastream:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#3b4752">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icono-192.png">
@@ -157,6 +157,23 @@
   }
   #menuFoto button + button { border-top: 1px solid var(--borde); }
 
+  /* Cámara */
+  #visorCam {
+    position: fixed; inset: 0; z-index: 20; background: #000;
+    display: grid; grid-template-rows: 1fr auto;
+  }
+  #visorCam video { width: 100%; height: 100%; object-fit: contain; min-height: 0; }
+  #visorCam video.espejo { transform: scaleX(-1); }
+  .camBarra {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center;
+    padding: 20px 24px calc(24px + env(safe-area-inset-bottom));
+  }
+  #camDisparar {
+    width: 72px; height: 72px; border-radius: 50%; cursor: pointer;
+    background: #fff; border: 5px solid rgba(255,255,255,.35); background-clip: padding-box;
+  }
+  #camDisparar:disabled { opacity: .5; }
+
   /* Visor de fotos */
   #visor {
     position: fixed; inset: 0; background: rgba(0,0,0,.92); display: grid; place-items: center;
@@ -222,6 +239,15 @@
 <div id="menuFoto" class="oculto">
   <button type="button" id="opCamara">Hacer foto</button>
   <button type="button" id="opGaleria">Elegir de la galería</button>
+</div>
+
+<div id="visorCam" class="oculto">
+  <video playsinline muted autoplay></video>
+  <div class="camBarra">
+    <button type="button" class="redondo claro" id="camCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <button type="button" id="camDisparar" aria-label="Hacer foto"></button>
+    <button type="button" class="redondo claro" id="camGirar" aria-label="Cambiar de cámara"><svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7a5 5 0 0 1 4.6 7l1.5 1.5A7 7 0 0 0 12 5Zm-4.6 3.5L5.9 7A7 7 0 0 0 12 19v3l4-4-4-4v3a5 5 0 0 1-4.6-8.5Z"/></svg></button>
+  </div>
 </div>
 
 <div id="visor" class="oculto"><img alt=""></div>
@@ -454,24 +480,73 @@ async function reducirFoto(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image(); img.src = url; await img.decode();
-    let res = null;
-    for (const [max, q] of [[1600, .8], [1280, .7], [1024, .6]]) {
-      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
-      res = { blob, w: c.width, h: c.height };
-      if (blob.size <= 600000) break;
-    }
-    return res;
+    return await aJpeg(img, img.naturalWidth, img.naturalHeight);
   } finally { URL.revokeObjectURL(url); }
 }
+
+async function aJpeg(fuente, ancho, alto) {
+  let res = null;
+  for (const [max, q] of [[1600, .8], [1280, .7], [1024, .6]]) {
+    const s = Math.min(1, max / Math.max(ancho, alto));
+    const c = document.createElement('canvas');
+    c.width = Math.round(ancho * s); c.height = Math.round(alto * s);
+    c.getContext('2d').drawImage(fuente, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    res = { blob, w: c.width, h: c.height };
+    if (blob.size <= 600000) break;
+  }
+  return res;
+}
+
+/* ---------- Cámara dentro de la app ----------
+   Abrir la cámara del sistema puede hacer que Android cierre el navegador
+   por falta de memoria y se pierda la foto. Aquí la cámara funciona dentro
+   de la propia app, sin salir de ella. */
+let flujoCam = null, mirandoAtras = true;
+
+async function abrirCamara() {
+  if (!navigator.mediaDevices?.getUserMedia) { $('#archivoCamara').click(); return; }
+  cerrarFlujo();
+  try {
+    flujoCam = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: mirandoAtras ? 'environment' : 'user', width: { ideal: 1920 }, height: { ideal: 1440 } }
+    });
+  } catch { estado('Sin permiso para la cámara', true); return; }
+  const v = $('#visorCam video');
+  v.srcObject = flujoCam; v.classList.toggle('espejo', !mirandoAtras);
+  $('#visorCam').classList.remove('oculto');
+  try { await v.play(); } catch {}
+}
+
+function cerrarFlujo() {
+  if (flujoCam) flujoCam.getTracks().forEach(t => t.stop());
+  flujoCam = null;
+}
+function cerrarCamara() {
+  cerrarFlujo();
+  $('#visorCam video').srcObject = null;
+  $('#visorCam').classList.add('oculto');
+}
+
+$('#camCerrar').onclick = cerrarCamara;
+$('#camGirar').onclick = () => { mirandoAtras = !mirandoAtras; abrirCamara(); };
+$('#camDisparar').onclick = async () => {
+  const v = $('#visorCam video');
+  if (!v.videoWidth) return;
+  const btn = $('#camDisparar'); btn.disabled = true;
+  try {
+    const { blob, w, h } = await aJpeg(v, v.videoWidth, v.videoHeight);
+    cerrarCamara();
+    await enviarAdjunto(blob, 'foto', { w, h });
+  } catch { estado('No se pudo hacer la foto', true); }
+  btn.disabled = false;
+};
 
 const menuFoto = $('#menuFoto');
 $('#adjuntar').onclick = e => { e.stopPropagation(); menuFoto.classList.toggle('oculto'); };
 document.addEventListener('click', e => { if (!menuFoto.contains(e.target)) menuFoto.classList.add('oculto'); });
-$('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); $('#archivoCamara').click(); };
+$('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); abrirCamara(); };
 $('#opGaleria').onclick = () => { menuFoto.classList.add('oculto'); $('#archivoGaleria').click(); };
 
 async function fotoElegida(input) {
