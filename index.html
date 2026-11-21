@@ -209,7 +209,7 @@
   #formato .segmentos button:nth-child(2) { font-style: italic; }
   #formato .segmentos button:nth-child(3) { text-decoration: line-through; }
   #formato .segmentos button:nth-child(4) { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
-  .barra { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .barra { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
   #barraContexto {
     display: flex; align-items: center; gap: 10px; margin: 8px 12px 0; padding: 6px 4px 6px 12px;
     border-left: 3px solid var(--acento); background: var(--fondo); border-radius: 8px;
@@ -340,6 +340,7 @@
   .grupo .botonFila + .botonFila { border-top: 1px solid var(--borde); }
 
   /* Portada */
+  #portada.tapa { z-index: 60; }
   #portada { position: fixed; inset: 0; z-index: 12; background: var(--fondo); display: grid; grid-template-rows: auto 1fr; }
   .pCabecera { display: flex; align-items: center; gap: 4px; padding: calc(18px + env(safe-area-inset-top)) 16px 10px; }
   .pCabecera h1 { font-size: 30px; font-weight: 600; padding-left: 4px; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; touch-action: manipulation; }
@@ -441,6 +442,7 @@
     </div>
     <div class="barra" id="barraNormal">
       <button class="redondo claro" id="adjuntar" aria-label="Foto"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
+      <button class="redondo claro" id="emojiBtn" aria-label="Emojis"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm-3.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM7.5 13.5h9a4.5 4.5 0 0 1-9 0Z"/></svg></button>
       <input type="file" id="archivoCamara" accept="image/*" capture="environment" class="oculto">
       <input type="file" id="archivoGaleria" accept="image/*" multiple class="oculto">
       <textarea id="texto" rows="1" maxlength="4000" placeholder="Escribe un mensaje"></textarea>
@@ -1824,8 +1826,10 @@ function crearListaEmojis(r) {
 }
 let emojiElegido = null;
 const segmentador = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('es', { granularity: 'grapheme' }) : null;
-function abrirPanelEmoji(elegir) {
-  emojiElegido = elegir;
+let emojiSeguir = false;
+function abrirPanelEmoji(elegir, { seguir = false } = {}) {
+  emojiElegido = elegir; emojiSeguir = seguir;
+  $('#emojiCancelar').textContent = seguir ? 'Listo' : 'Cancelar';
   const r = $('#emojiRejilla');
   if (!listaEmojisCreada) crearListaEmojis(r);
   r.scrollTop = 0;
@@ -1833,7 +1837,21 @@ function abrirPanelEmoji(elegir) {
   $('#panelEmoji').classList.remove('oculto');
 }
 function cerrarPanelEmoji() { $('#panelEmoji').classList.add('oculto'); $('#emojiEntrada').blur(); emojiElegido = null; }
-function elegirEmoji(e) { const f = emojiElegido; cerrarPanelEmoji(); if (f) f(e); }
+function elegirEmoji(e) {
+  const f = emojiElegido;
+  if (emojiSeguir) { $('#emojiEntrada').value = ''; if (f) f(e); return; } // al escribir: se pueden poner varios
+  cerrarPanelEmoji(); if (f) f(e);
+}
+/* Emojis en el mensaje: se insertan donde esté el cursor */
+function insertarEmoji(e) {
+  const t = $('#texto');
+  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
+  t.value = t.value.slice(0, a) + e + t.value.slice(b);
+  const pos = a + e.length;
+  try { t.setSelectionRange(pos, pos); } catch {}
+  ajustar();
+}
+$('#emojiBtn').onclick = () => { menuFoto.classList.add('oculto'); $('#texto').blur(); abrirPanelEmoji(insertarEmoji, { seguir: true }); };
 $('#emojiEntrada').addEventListener('input', e => {
   const v = e.target.value;
   const partes = segmentador ? [...segmentador.segment(v)].map(s => s.segment) : [...v];
@@ -1841,7 +1859,7 @@ $('#emojiEntrada').addEventListener('input', e => {
   if (emoji) elegirEmoji(emoji);
   else if (v) e.target.value = ''; // solo se admiten emojis
 });
-$('#emojiCancelar').onclick = cerrarPanelEmoji;
+$('#emojiCancelar').onclick = () => { const seguir = emojiSeguir; cerrarPanelEmoji(); if (seguir) $('#texto').focus(); };
 $('#panelEmoji').onclick = e => { if (e.target.id === 'panelEmoji') cerrarPanelEmoji(); };
 $('#hojaCancelar').onclick = () => { if (!hojaReciente()) cerrarHoja(); };
 $('#velo').onclick = e => { if (e.target.id === 'velo' && !hojaReciente()) cerrarHoja(); };
@@ -1975,7 +1993,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.0';
+const VERSION = '4.1';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2189,7 +2207,32 @@ function cerrarConversacion() {
    Al elegir una foto de la galería o guardar algo, el móvil sale un momento de la app: eso no cuenta. */
 let ocultoDesde = 0, selectorAbierto = false, estabaEnChat = false;
 const VUELTA_RAPIDA = 60000; // si vuelves antes de 1 minuto, entras directamente
+/* La miniatura de «recientes» se hace en cuanto la app pierde el foco, antes de quedar oculta.
+   Por eso se tapa ya con la portada (sin cerrar nada de lo que hay debajo) y se destapa al volver. */
+let tapadoEn = 0;
+const tapada = () => $('#portada').classList.contains('tapa');
+function tapar() {
+  if (!ajustes.portada || selectorAbierto || !clave || tapada() || !$('#portada').classList.contains('oculto')) return;
+  tapadoEn = Date.now();
+  pintarPagina('inicio');
+  $('#portada').classList.add('tapa'); $('#portada').classList.remove('oculto');
+}
+function destapar() {
+  if (!tapada()) return false;
+  $('#portada').classList.remove('tapa');
+  const fuera = Date.now() - tapadoEn;
+  if (pinActivo() && fuera > 30000) { cerrarConversacion(); mostrarPortada(); }
+  else if (fuera < VUELTA_RAPIDA) $('#portada').classList.add('oculto'); // vuelve justo donde estaba
+  else mostrarPortada();
+  return true;
+}
+window.addEventListener('blur', tapar);
+window.addEventListener('pagehide', tapar);
+window.addEventListener('focus', () => { if (document.visibilityState === 'visible') destapar(); });
+
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && tapada()) { arrancarSondeo(); return; }
+  if (document.visibilityState === 'visible' && tapada()) { destapar(); arrancarSondeo(); return; }
   if (document.visibilityState === 'hidden') {
     ocultoDesde = Date.now();
     estabaEnChat = !!clave && $('#portada').classList.contains('oculto') && $('#entrada').classList.contains('oculto');
@@ -2421,6 +2464,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
+  $('#portada').classList.remove('tapa');
   cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji();
   menuFoto.classList.add('oculto');
   for (const s of ['#chat', '#ajustes', '#galeria', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
@@ -2429,6 +2473,7 @@ function mostrarPortada() {
   $('#portada').classList.remove('oculto');
 }
 function mostrarChat() {
+  $('#portada').classList.remove('tapa');
   $('#portada').classList.add('oculto');
   $('#chat').classList.remove('oculto');
   history.pushState({ chat: 1 }, '');
