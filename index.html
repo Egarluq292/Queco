@@ -93,6 +93,21 @@
     box-shadow: 0 2px 8px rgba(0,0,0,.08);
   }
   .flotante svg { width: 22px; height: 22px; }
+  .flotante.izq { right: auto; left: 10px; color: var(--acento); }
+  .flotante.izq svg { fill: none; }
+
+  /* Galería: fotos y audios de un vistazo */
+  #galeria { position: fixed; inset: 0; z-index: 15; background: var(--fondo); display: grid; grid-template-rows: auto auto 1fr; }
+  #galeria .segmentos { margin: 4px 16px 10px; }
+  #galeriaCuerpo { overflow-y: auto; padding: 0 2px calc(24px + env(safe-area-inset-bottom)); }
+  .galMes { font-size: 13px; font-weight: 600; color: var(--suave); padding: 14px 14px 6px; }
+  .galRejilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .galRejilla button { aspect-ratio: 1; padding: 0; border: 0; background: var(--borde); overflow: hidden; cursor: pointer; }
+  .galRejilla img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .galAudio { display: grid; gap: 6px; padding: 12px 14px; margin: 0 12px 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; }
+  .galAudio span { font-size: 13px; color: var(--suave); }
+  .galAudio audio { width: 100%; height: 40px; }
+  .galVacio { text-align: center; color: var(--suave); font-size: 14px; padding: 40px 20px; }
   #aviso {
     position: absolute; z-index: 7; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     max-width: calc(100% - 120px); padding: 6px 14px; border-radius: 99px; font-size: 13px; text-align: center;
@@ -411,6 +426,7 @@
 
 <!-- Conversación -->
 <section id="chat" class="oculto">
+  <button class="icono flotante izq" id="abrirGaleria" aria-label="Fotos y audios"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
   <button class="icono flotante" id="abrirAjustes" aria-label="Ajustes"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10.3 2h3.4l.5 2.6c.6.2 1.2.5 1.7.9l2.5-.9 1.7 2.9-2 1.7c.1.6.1 1.2 0 1.8l2 1.7-1.7 2.9-2.5-.9c-.5.4-1.1.7-1.7.9l-.5 2.6h-3.4l-.5-2.6c-.6-.2-1.2-.5-1.7-.9l-2.5.9-1.7-2.9 2-1.7a5.6 5.6 0 0 1 0-1.8l-2-1.7 1.7-2.9 2.5.9c.5-.4 1.1-.7 1.7-.9L10.3 2ZM12 8.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z" transform="translate(0 1)"/></svg></button>
   <div id="aviso" class="oculto"></div>
   <div id="lista"><p class="vacio" id="vacio">Aún no hay mensajes.</p></div>
@@ -436,6 +452,17 @@
       <button class="redondo" id="pararGrab" aria-label="Enviar audio"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
     </div>
   </div>
+</section>
+
+<!-- Galería -->
+<section id="galeria" class="oculto">
+  <header class="cabecera">
+    <button class="icono" id="cerrarGaleria" aria-label="Volver"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 14 3.2 5.2 12l8.8 8.8 1.4-1.4L8 12z"/></svg></button>
+    <div class="titulo">Fotos y audios</div>
+    <span></span>
+  </header>
+  <div class="segmentos" id="segGaleria"><button data-v="fotos" class="activo">Fotos</button><button data-v="audios">Audios</button></div>
+  <div id="galeriaCuerpo"></div>
 </section>
 
 <!-- Ajustes -->
@@ -1388,6 +1415,52 @@ $('#archivoGaleria').onchange = e => fotoElegida(e.target);
 
 /* Visor */
 let fotoEnVisor = null;
+/* ---------- Galería ---------- */
+let pestanaGaleria = 'fotos';
+const fmtMes = ts => { const t = new Date(ts).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); return t[0].toUpperCase() + t.slice(1); };
+function pintarGaleria() {
+  marcarSegmento('#segGaleria', pestanaGaleria);
+  const cuerpo = $('#galeriaCuerpo'); cuerpo.replaceChildren();
+  const tipo = pestanaGaleria === 'fotos' ? 'foto' : 'audio';
+  const lista = [...mensajes].filter(([, r]) => r.m.k === tipo).sort((a, b) => b[0] - a[0]);
+  if (!lista.length) {
+    const v = document.createElement('p'); v.className = 'galVacio';
+    v.textContent = tipo === 'foto' ? 'Aún no hay fotos en la conversación.' : 'Aún no hay audios en la conversación.';
+    cuerpo.append(v); return;
+  }
+  let mes = '', rejilla = null;
+  for (const [id, { m }] of lista) {
+    const mm = fmtMes(m.ts);
+    if (mm !== mes) {
+      mes = mm;
+      const t = document.createElement('div'); t.className = 'galMes'; t.textContent = mm; cuerpo.append(t);
+      if (tipo === 'foto') { rejilla = document.createElement('div'); rejilla.className = 'galRejilla'; cuerpo.append(rejilla); }
+    }
+    if (tipo === 'foto') {
+      const b = document.createElement('button'); b.setAttribute('aria-label', 'Foto');
+      const img = document.createElement('img'); img.alt = '';
+      cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; });
+      b.append(img); b.onclick = () => abrirVisor(id);
+      rejilla.append(b);
+    } else {
+      const c = document.createElement('div'); c.className = 'galAudio';
+      const s = document.createElement('span');
+      const f = new Date(m.ts);
+      s.textContent = `${m.d === disp ? 'Tú' : 'Recibido'} · ${f.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}, ${fmtHora(m.ts)}${m.s ? ' · ' + Math.floor(m.s / 60) + ':' + String(m.s % 60).padStart(2, '0') : ''}`;
+      c.append(s);
+      cargarAdjunto(m.a, m.m).then(r => {
+        if (!r) return;
+        const au = document.createElement('audio'); au.controls = true; au.preload = 'metadata'; au.src = r.url;
+        au.setAttribute('controlsList', 'nodownload'); c.append(au);
+      });
+      cuerpo.append(c);
+    }
+  }
+}
+$('#abrirGaleria').onclick = () => { pintarGaleria(); $('#galeria').classList.remove('oculto'); history.pushState({ chat: 1 }, ''); };
+$('#cerrarGaleria').onclick = () => history.back();
+$('#segGaleria').onclick = e => { const v = e.target.dataset?.v; if (v) { pestanaGaleria = v; pintarGaleria(); } };
+
 let visorId = null;
 /* Fotos de la conversación, de la más antigua a la más reciente */
 const idsFotos = () => [...mensajes].filter(([, r]) => r.m.k === 'foto').map(([id]) => id).sort((a, b) => a - b);
@@ -1899,7 +1972,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.8';
+const VERSION = '3.9';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2106,6 +2179,7 @@ function cerrarConversacion() {
   ultimaVersion = 0; temporal = 0; temporalId = 0;
   $('#chat').classList.add('oculto');
   $('#ajustes').classList.add('oculto');
+  $('#galeria').classList.add('oculto');
 }
 
 /* Al salir de la app se vuelve a la portada; con PIN, pasados 30 s hay que volver a ponerlo.
@@ -2346,7 +2420,7 @@ $('#pTitulo').addEventListener('click', () => {
 function mostrarPortada() {
   cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji();
   menuFoto.classList.add('oculto');
-  for (const s of ['#chat', '#ajustes', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
+  for (const s of ['#chat', '#ajustes', '#galeria', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
   if (pinResolver) terminarPin(null);
   pintarPagina('inicio');
   $('#portada').classList.remove('oculto');
@@ -2378,6 +2452,7 @@ window.addEventListener('popstate', () => {
   if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#editorFotos').classList.contains('oculto')) { cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
+  if (!$('#galeria').classList.contains('oculto')) { $('#galeria').classList.add('oculto'); return; }
   mostrarPortada();
 });
 
