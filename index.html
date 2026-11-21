@@ -102,8 +102,7 @@
   #galeriaCuerpo { overflow-y: auto; padding: 0 2px calc(24px + env(safe-area-inset-bottom)); }
   .galMes { font-size: 13px; font-weight: 600; color: var(--suave); padding: 14px 14px 6px; }
   .galRejilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
-  .galRejilla button { aspect-ratio: 1; padding: 0; border: 0; background: var(--borde); overflow: hidden; cursor: pointer; }
-  .galRejilla img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .galCelda { padding-bottom: 100%; }
   .galAudio { display: grid; gap: 6px; padding: 12px 14px; margin: 0 12px 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; }
   .galAudio span { font-size: 13px; color: var(--suave); }
   .galAudio audio { width: 100%; height: 40px; }
@@ -168,8 +167,10 @@
   .hoja .rejilla button { font-size: 25px; padding: 6px 0; border: 0 !important; }
   #gifBuscar { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo); outline: none; font-size: 16px; }
   .gifRejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; height: 52vh; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
-  .hoja .gifRejilla button { padding: 0; border: 0 !important; border-radius: 8px; overflow: hidden; background: var(--borde); }
-  .gifRejilla img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  /* Casillas con altura fija por proporción (padding-bottom): funciona igual en Safari */
+  .gifCelda, .galCelda { position: relative; height: 0; overflow: hidden; background: var(--borde); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .gifCelda { border-radius: 8px; }
+  .gifCelda img, .galCelda img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
   .gifNota { text-align: center; font-size: 13px; color: var(--suave); min-height: 1em; }
   .gifMarca { text-align: center; font-size: 11px; color: var(--suave); letter-spacing: .04em; }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
@@ -1460,7 +1461,7 @@ function pintarGaleria() {
       if (tipo === 'foto') { rejilla = document.createElement('div'); rejilla.className = 'galRejilla'; cuerpo.append(rejilla); }
     }
     if (tipo === 'foto') {
-      const b = document.createElement('button'); b.setAttribute('aria-label', 'Foto');
+      const b = document.createElement('div'); b.className = 'galCelda'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Foto');
       const img = document.createElement('img'); img.alt = '';
       cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; });
       b.append(img); b.onclick = () => abrirVisor(id);
@@ -1642,8 +1643,8 @@ async function cargarGifs(q, nuevo) {
     if (gen !== gifGen) return;
     gifDesde += res.lista.length; gifMas = !!res.mas;
     for (const g of res.lista) {
-      const b = document.createElement('button'); b.type = 'button';
-      b.style.aspectRatio = `${g.w} / ${g.h}`;
+      const b = document.createElement('div'); b.className = 'gifCelda'; b.setAttribute('role', 'button');
+      b.style.paddingBottom = `${Math.min(180, Math.max(40, g.h / g.w * 100)).toFixed(2)}%`;
       const img = document.createElement('img'); img.alt = 'GIF';
       b.append(img);
       funcionGifs({ accion: 'archivo', u: g.p }, true).then(bl => {
@@ -2070,7 +2071,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.5';
+const VERSION = '4.6';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
