@@ -1975,7 +1975,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.2';
+const VERSION = '4.3';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2469,6 +2469,42 @@ document.addEventListener('touchend', e => {
   // doble toque en el mismo sitio: evitar el zoom de la página (el visor de fotos tiene el suyo)
   if (ahora - ultimoToque.t < 300 && cerca && !e.target.closest('input, textarea, button, label, #pTitulo, #visor')) e.preventDefault();
   ultimoToque = { t: ahora, x: p.clientX, y: p.clientY };
+}, { passive: false });
+
+/* ---------- Cierre de emergencia ----------
+   Boca abajo, o 3 toques seguidos con dos dedos: la conversación se borra de la memoria,
+   aparece la portada y no hay «vuelta rápida». Se intenta además cerrar la app. */
+function enElChat() { return !!clave && !$('#chat').classList.contains('oculto') && $('#portada').classList.contains('oculto'); }
+function cierreEmergencia() {
+  if (!clave) return;
+  navigator.vibrate?.(40);
+  estabaEnChat = false; ocultoDesde = 0;
+  cerrarConversacion();
+  mostrarPortada();
+  try { window.close(); } catch {}
+}
+// Boca abajo: la gravedad apunta hacia la pantalla durante medio segundo
+let bocaAbajoDesde = 0;
+window.addEventListener('devicemotion', e => {
+  if (!enElChat()) { bocaAbajoDesde = 0; return; }
+  const g = e.accelerationIncludingGravity;
+  if (!g || g.z == null) return;
+  const z = g.z * SIGNO_GRAVEDAD;
+  if (z < -8 && Math.abs(g.x) < 4 && Math.abs(g.y) < 4) {
+    if (!bocaAbajoDesde) bocaAbajoDesde = Date.now();
+    else if (Date.now() - bocaAbajoDesde > 500) { bocaAbajoDesde = 0; cierreEmergencia(); }
+  } else bocaAbajoDesde = 0;
+});
+// En el iPhone el sensor necesita permiso, que solo se puede pedir tras un toque
+document.addEventListener('click', () => { if (ES_IOS) pedirSensor(); }, { once: true, capture: true });
+// Tres toques seguidos con dos dedos
+let toquesDosDedos = [];
+document.addEventListener('touchstart', e => {
+  if (e.touches.length !== 2 || !enElChat()) return;
+  const ahora = Date.now();
+  toquesDosDedos = toquesDosDedos.filter(t => ahora - t < 900);
+  toquesDosDedos.push(ahora);
+  if (toquesDosDedos.length >= 3) { toquesDosDedos = []; e.preventDefault(); cierreEmergencia(); }
 }, { passive: false });
 
 /* ---------- Inicio ---------- */
