@@ -94,6 +94,22 @@
   }
   .flotante svg { width: 22px; height: 22px; }
   .flotante.izq { right: auto; left: 10px; color: var(--acento); }
+  #barraSeleccion {
+    position: absolute; z-index: 8; top: 0; left: 0; right: 0;
+    display: grid; grid-template-columns: 44px 1fr 44px; align-items: center;
+    padding: calc(6px + env(safe-area-inset-top)) 10px 6px;
+    background: var(--panel); border-bottom: 1px solid var(--borde); box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  }
+  .selCuenta { text-align: center; font-weight: 600; }
+  #chat.seleccionando .flotante { display: none; }
+  .msj.seleccionado { box-shadow: 0 0 0 2px var(--fondo), 0 0 0 5px var(--acento); }
+  .msj.seleccionado::after {
+    content: "✓"; position: absolute; top: -8px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--acento); color: var(--acento-txt); font-size: 13px; line-height: 22px; text-align: center; font-weight: 700;
+  }
+  .msj:not(.mio).seleccionado::after { right: -8px; }
+  .msj.mio.seleccionado::after { left: -8px; }
+  #chat.seleccionando .msj { position: relative; }
   .flotante.izq svg { fill: none; }
 
   /* Galería: fotos y audios de un vistazo */
@@ -433,6 +449,11 @@
 
 <!-- Conversación -->
 <section id="chat" class="oculto">
+  <div id="barraSeleccion" class="oculto">
+    <button class="icono" id="selSalir" aria-label="Cancelar selección"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <div class="selCuenta" id="selCuenta">1 seleccionado</div>
+    <button class="icono" id="selAcciones" aria-label="Acciones"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1.5v-8H10Zm2.5 0v8H14v-8h-1.5Z"/></svg></button>
+  </div>
   <button class="icono flotante izq" id="abrirGaleria" aria-label="Fotos y audios"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
   <button class="icono flotante" id="abrirAjustes" aria-label="Ajustes"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10.3 2h3.4l.5 2.6c.6.2 1.2.5 1.7.9l2.5-.9 1.7 2.9-2 1.7c.1.6.1 1.2 0 1.8l2 1.7-1.7 2.9-2.5-.9c-.5.4-1.1.7-1.7.9l-.5 2.6h-3.4l-.5-2.6c-.6-.2-1.2-.5-1.7-.9l-2.5.9-1.7-2.9 2-1.7a5.6 5.6 0 0 1 0-1.8l-2-1.7 1.7-2.9 2.5.9c.5-.4 1.1-.7 1.7-.9L10.3 2ZM12 8.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z" transform="translate(0 1)"/></svg></button>
   <div id="aviso" class="oculto"></div>
@@ -1101,6 +1122,7 @@ async function leer() {
     } while (filas.length === 200);
     if (cambios) {
       rehacerSeparadores(); recalcularTemporal(); pintarVistos();
+      if (seleccion) pintarSeleccion();
       if (abajo || propio) { lista.scrollTop = lista.scrollHeight; ocultarNuevos(); }
       else if (ajenosNuevos) { nuevosSinVer += ajenosNuevos; mostrarNuevos(); }
     }
@@ -1955,11 +1977,67 @@ function confirmar(texto, boton, peligro = true) {
 }
 
 /* Pulsación larga sobre un mensaje */
+/* ---------- Selección de varios mensajes ---------- */
+let seleccion = null; // Set de ids, o null si no se está seleccionando
+function iniciarSeleccion(id) {
+  if (editandoId !== null) terminarEdicion();
+  seleccion = new Set([id]);
+  $('#chat').classList.add('seleccionando');
+  $('#barraSeleccion').classList.remove('oculto');
+  history.pushState({ chat: 1 }, '');
+  pintarSeleccion();
+}
+function alternarSeleccion(id) {
+  if (!seleccion || !mensajes.has(id)) return;
+  if (seleccion.has(id)) seleccion.delete(id); else seleccion.add(id);
+  if (!seleccion.size) { salirSeleccion(); return; }
+  pintarSeleccion();
+}
+function pintarSeleccion() {
+  for (const id of [...seleccion]) if (!mensajes.has(id)) seleccion.delete(id);
+  for (const [id, r] of mensajes) r.el.classList.toggle('seleccionado', seleccion.has(id));
+  const n = seleccion.size;
+  $('#selCuenta').textContent = n === 1 ? '1 seleccionado' : `${n} seleccionados`;
+}
+function salirSeleccion() {
+  if (!seleccion) return;
+  seleccion = null;
+  $('#chat').classList.remove('seleccionando');
+  $('#barraSeleccion').classList.add('oculto');
+  for (const r of mensajes.values()) r.el.classList.remove('seleccionado');
+}
+$('#selSalir').onclick = salirSeleccion;
+$('#selAcciones').onclick = () => {
+  if (!seleccion?.size) return;
+  const ids = [...seleccion].sort((a, b) => a - b);
+  const regs = ids.map(i => mensajes.get(i)).filter(Boolean);
+  const n = ids.length, uno = n === 1;
+  const ops = [{
+    texto: `Eliminar para mí (${n})`, peligro: true,
+    nota: uno ? 'Se quitará el mensaje solo de tu móvil. Tu colega lo seguirá viendo.'
+              : `Se quitarán los ${n} mensajes solo de tu móvil. Tu colega los seguirá viendo.`,
+    accion: () => { for (const i of ids) ocultarParaMi(i); salirSeleccion(); }
+  }];
+  if (regs.every(r => r.m.d === disp && !r.eliminado)) ops.push({
+    texto: `Eliminar para todos (${n})`, peligro: true,
+    nota: uno ? 'Se eliminará el mensaje del servidor.' : `Se eliminarán los ${n} mensajes del servidor.`,
+    accion: async () => {
+      salirSeleccion();
+      try { for (const i of ids) await borrarMensaje(i); } catch { estado('No se pudieron eliminar todos', true); }
+      leer();
+    }
+  });
+  const textos = regs.filter(r => !r.m.k || r.m.k === 'texto').map(r => r.m.t);
+  if (textos.length) ops.unshift({ texto: 'Copiar texto', accion: () => { navigator.clipboard?.writeText(textos.join('\n')).then(() => estado('Copiado')).catch(() => {}); salirSeleccion(); } });
+  abrirHoja(ops);
+};
+
 function menuMensaje(id) {
   const reg = mensajes.get(id);
   if (!reg) return;
   const { m } = reg; const mio = m.d === disp;
-  const ops = [{ texto: 'Responder', accion: () => empezarRespuesta(id) }];
+  if (seleccion) { alternarSeleccion(id); return; }
+  const ops = [{ texto: 'Responder', accion: () => empezarRespuesta(id) }, { texto: 'Seleccionar varios', accion: () => iniciarSeleccion(id) }];
   if (reg.eliminado) ops.shift(); // no se responde a un mensaje eliminado
   if (!m.k || m.k === 'texto') {
     ops.push({ texto: 'Copiar', accion: () => navigator.clipboard?.writeText(m.t).then(() => estado('Copiado')).catch(() => {}) });
@@ -2001,8 +2079,9 @@ function puedeEditar(id) {
     burbuja = null; inicio = null; modo = null; dx = 0; avisado = false;
   };
   lista.addEventListener('pointerdown', e => {
+    largo = false; arrastrado = false; // cada toque nuevo empieza limpio
     const b = e.target.closest('.msj');
-    if (!b || !b.dataset.id) return;
+    if (!b || !b.dataset.id || seleccion) return;
     largo = false; arrastrado = false; burbuja = b; inicio = { x: e.clientX, y: e.clientY }; modo = null; dx = 0;
     b.style.transition = 'transform .12s';
     b.classList.add('pulsado');
@@ -2051,6 +2130,12 @@ function puedeEditar(id) {
   });
   lista.addEventListener('click', e => {
     if (largo || arrastrado) { e.preventDefault(); e.stopPropagation(); largo = false; arrastrado = false; return; }
+    if (seleccion) {
+      const b = e.target.closest('.msj');
+      e.preventDefault(); e.stopPropagation();
+      if (b?.dataset.id) alternarSeleccion(Number(b.dataset.id));
+      return;
+    }
     const cita = e.target.closest('.cita');
     if (cita) {
       const destino = mensajes.get(Number(cita.dataset.ref))?.el;
@@ -2071,7 +2156,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.7';
+const VERSION = '4.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2270,7 +2355,7 @@ function cerrarConversacion() {
   clearInterval(temporizador);
   cerrarCamara(); cerrarVisor(); cerrarHoja();
   if (editandoId !== null) terminarEdicion();
-  terminarRespuesta(); ocultarNuevos();
+  terminarRespuesta(); ocultarNuevos(); salirSeleccion();
   limpiarCache();
   mensajes.clear(); reacciones.clear();
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
@@ -2517,6 +2602,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
+  salirSeleccion();
   cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji(); cerrarPanelGif();
   menuFoto.classList.add('oculto');
   for (const s of ['#chat', '#ajustes', '#galeria', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
@@ -2548,6 +2634,7 @@ async function abrirSecreto() {
 /* Botón o gesto «atrás» del móvil: vuelve a la portada */
 window.addEventListener('popstate', () => {
   if (!$('#portada').classList.contains('oculto')) { if (paginaPortada !== 'inicio') pintarPagina('inicio'); return; }
+  if (seleccion && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto')) { salirSeleccion(); return; }
   if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#editorFotos').classList.contains('oculto')) { cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
@@ -2563,7 +2650,7 @@ document.addEventListener('touchend', e => {
   const ahora = Date.now(), p = e.changedTouches[0] || { clientX: 0, clientY: 0 };
   const cerca = Math.hypot(p.clientX - ultimoToque.x, p.clientY - ultimoToque.y) < 30;
   // doble toque en el mismo sitio: evitar el zoom de la página (el visor de fotos tiene el suyo)
-  if (ahora - ultimoToque.t < 300 && cerca && !e.target.closest('input, textarea, button, label, #pTitulo, #visor')) e.preventDefault();
+  if (ahora - ultimoToque.t < 300 && cerca && !e.target.closest('input, textarea, button, label, #pTitulo, #visor, #chat.seleccionando')) e.preventDefault();
   ultimoToque = { t: ahora, x: p.clientX, y: p.clientY };
 }, { passive: false });
 
