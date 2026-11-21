@@ -1133,6 +1133,9 @@ function limpiarCache() {
 
 /* Guardar en el móvil, solo cuando tú lo pides */
 async function guardarAdjunto(m) {
+  const foto = m.k === 'foto';
+  if (!await confirmar(foto ? 'La foto se guardará en tu móvil, fuera de la app.' : 'El audio se guardará en tu móvil, fuera de la app.',
+    foto ? 'Guardar foto' : 'Guardar audio', false)) return;
   const r = await cargarAdjunto(m.a, m.m);
   if (!r) { estado('No se pudo guardar', true); return; }
   const ext = { 'image/jpeg': 'jpg', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }[m.m] || 'bin';
@@ -1843,9 +1846,9 @@ $('#panelEmoji').onclick = e => { if (e.target.id === 'panelEmoji') cerrarPanelE
 $('#hojaCancelar').onclick = () => { if (!hojaReciente()) cerrarHoja(); };
 $('#velo').onclick = e => { if (e.target.id === 'velo' && !hojaReciente()) cerrarHoja(); };
 
-function confirmar(texto, boton) {
+function confirmar(texto, boton, peligro = true) {
   return new Promise(res => {
-    abrirHoja([{ texto: boton, peligro: true, accion: () => res(true) }]);
+    abrirHoja([{ texto: boton, peligro, accion: () => res(true) }]);
     const t = document.createElement('div');
     t.style.cssText = 'padding:14px 16px;font-size:13px;color:var(--suave);text-align:center';
     t.textContent = texto;
@@ -1972,7 +1975,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.9';
+const VERSION = '4.0';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
