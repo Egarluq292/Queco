@@ -38,7 +38,7 @@
     }
   }
   * { box-sizing: border-box; margin: 0; }
-  html, body { height: 100%; }
+  html, body { height: 100%; overflow-x: hidden; max-width: 100%; }
   html { background: var(--fondo); touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   body {
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -86,7 +86,7 @@
   .enlace { background: none; border: 0; color: var(--acento); cursor: pointer; font-size: 14px; padding: 6px 4px; }
 
   /* Chat */
-  #chat { height: 100dvh; display: grid; grid-template-rows: 1fr auto; position: relative; }
+  #chat { height: 100dvh; display: grid; grid-template-rows: 1fr auto; grid-template-columns: minmax(0, 1fr); position: relative; overflow: hidden; }
   .flotante {
     position: absolute; z-index: 6; top: calc(8px + env(safe-area-inset-top)); right: 10px;
     width: 40px; height: 40px; background: var(--panel); border: 1px solid var(--borde);
@@ -113,7 +113,7 @@
   }
   .icono svg { width: 24px; height: 24px; fill: var(--acento); }
   #lista {
-    contain: strict; overscroll-behavior: contain;
+    contain: strict; overscroll-behavior: contain; overflow-x: hidden;
     overflow-y: auto; padding: calc(58px + env(safe-area-inset-top)) 14px 16px; display: flex; flex-direction: column; gap: 6px;
     font-size: calc(16px * var(--escala));
   }
@@ -170,7 +170,7 @@
   .msj .autor { font-size: 12px; font-weight: 600; color: var(--acento); margin-bottom: 1px; }
   .msj .hora { font-size: 11px; opacity: .65; text-align: right; margin-top: 2px; }
   .vacio { margin: auto; color: var(--suave); font-size: 14px; text-align: center; }
-  #pie { background: var(--panel); border-top: 1px solid var(--borde); position: relative; }
+  #pie { background: var(--panel); border-top: 1px solid var(--borde); position: relative; min-width: 0; }
   #nuevos {
     position: absolute; right: 14px; bottom: calc(100% + 12px); z-index: 4;
     width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--borde);
@@ -205,7 +205,7 @@
   #barraContexto .icono { width: 36px; height: 36px; }
   #barraContexto .icono svg { width: 18px; height: 18px; }
   textarea {
-    flex: 1; resize: none; max-height: 140px; padding: 10px 14px;
+    flex: 1 1 0; width: 0; min-width: 0; resize: none; max-height: 140px; padding: 10px 14px;
     border-radius: 20px; border: 1px solid var(--borde); background: var(--fondo); outline: none;
     font-size: max(16px, calc(16px * var(--escala))); /* menos de 16 px hace que el iPhone amplíe al escribir */
     field-sizing: content; min-height: 44px;
@@ -1587,7 +1587,7 @@ function empezarRespuesta(id) {
   if (editandoId !== null) terminarEdicion();
   respondiendoA = id;
   mostrarContexto('Respondiendo', previa(reg.m));
-  $('#texto').focus();
+  $('#texto').focus({ preventScroll: true });
 }
 function cerrarContexto() { $('#barraContexto').classList.add('oculto'); }
 function terminarEdicion() {
@@ -1899,7 +1899,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '3.7';
+const VERSION = '3.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
