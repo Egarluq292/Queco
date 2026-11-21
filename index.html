@@ -166,6 +166,12 @@
   .rejilla { display: grid; grid-template-columns: repeat(8, 1fr); height: 46vh; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
   .rejilla h3 { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; padding: 10px 4px 4px; position: sticky; top: 0; background: var(--panel); }
   .hoja .rejilla button { font-size: 25px; padding: 6px 0; border: 0 !important; }
+  #gifBuscar { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo); outline: none; font-size: 16px; }
+  .gifRejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; height: 52vh; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
+  .hoja .gifRejilla button { padding: 0; border: 0 !important; border-radius: 8px; overflow: hidden; background: var(--borde); }
+  .gifRejilla img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .gifNota { text-align: center; font-size: 13px; color: var(--suave); min-height: 1em; }
+  .gifMarca { text-align: center; font-size: 11px; color: var(--suave); letter-spacing: .04em; }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
   .msj.eliminado .hora { color: var(--error); opacity: 1; }
   .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
@@ -555,6 +561,7 @@
 <div id="menuFoto" class="oculto">
   <button type="button" id="opCamara">Hacer foto</button>
   <button type="button" id="opGaleria">Elegir de la galería</button>
+  <button type="button" id="opGif">Enviar un GIF</button>
 </div>
 
 <!-- Hoja de acciones -->
@@ -574,6 +581,19 @@
       <div class="rejilla" id="emojiRejilla"></div>
     </div>
     <button class="cancelar" id="emojiCancelar">Cancelar</button>
+  </div>
+</div>
+
+<!-- Panel de GIFs (a través de la función «gifs» de Supabase) -->
+<div id="panelGif" class="velo oculto">
+  <div class="hoja">
+    <div class="grupoBotones panelEmoji">
+      <input type="search" id="gifBuscar" placeholder="Buscar GIF" autocomplete="off" enterkeyhint="search">
+      <div class="gifRejilla" id="gifRejilla"></div>
+      <p class="gifNota" id="gifNota"></p>
+      <p class="gifMarca">Powered by GIPHY</p>
+    </div>
+    <button class="cancelar" id="gifCerrar">Cancelar</button>
   </div>
 </div>
 
@@ -792,6 +812,7 @@ function formatear(t, prof = 0) {
 const sinMarcas = t => t.replace(/```|[*_~`]/g, '');
 function previa(m) {
   if (m.k === 'foto') return '📷 ' + (m.t ? sinMarcas(m.t).slice(0, 120) : 'Foto');
+  if (m.k === 'gif') return '🎞️ GIF';
   if (m.k === 'audio') return '🎤 Audio';
   return sinMarcas(m.t || '').slice(0, 140);
 }
@@ -814,9 +835,9 @@ function crearElemento(id, m) {
   b.className = 'msj' + (mio ? ' mio' : '');
   b.dataset.id = id; b.dataset.ts = m.ts;
   if (m.r && m.r.i) b.append(crearCita(m.r));
-  if (m.k === 'foto') {
+  if (m.k === 'foto' || m.k === 'gif') {
     b.classList.add('con-foto');
-    const img = document.createElement('img'); img.className = 'foto'; img.alt = 'Foto'; img.draggable = false;
+    const img = document.createElement('img'); img.className = 'foto'; img.alt = m.k === 'gif' ? 'GIF' : 'Foto'; img.draggable = false;
     if (m.w && m.h) { img.width = m.w; img.height = m.h; }
     cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; else img.alt = 'Foto no disponible'; });
     b.append(img);
@@ -1133,12 +1154,11 @@ function limpiarCache() {
 
 /* Guardar en el móvil, solo cuando tú lo pides */
 async function guardarAdjunto(m) {
-  const foto = m.k === 'foto';
-  if (!await confirmar(foto ? 'La foto se guardará en tu móvil, fuera de la app.' : 'El audio se guardará en tu móvil, fuera de la app.',
-    foto ? 'Guardar foto' : 'Guardar audio', false)) return;
+  const nombreTipo = { foto: ['La foto', 'Guardar foto'], gif: ['El GIF', 'Guardar GIF'] }[m.k] || ['El audio', 'Guardar audio'];
+  if (!await confirmar(`${nombreTipo[0]} se guardará en tu móvil, fuera de la app.`, nombreTipo[1], false)) return;
   const r = await cargarAdjunto(m.a, m.m);
   if (!r) { estado('No se pudo guardar', true); return; }
-  const ext = { 'image/jpeg': 'jpg', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }[m.m] || 'bin';
+  const ext = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }[m.m] || 'bin';
   const f = new Date(m.ts);
   const sello = `${f.getFullYear()}${String(f.getMonth() + 1).padStart(2, '0')}${String(f.getDate()).padStart(2, '0')}-${String(f.getHours()).padStart(2, '0')}${String(f.getMinutes()).padStart(2, '0')}`;
   const nombre = `${m.k}-${sello}.${ext}`;
@@ -1173,9 +1193,9 @@ async function enviarAdjunto(blob, k, extra) {
   const c = aHex(crypto.getRandomValues(new Uint8Array(6)));
   const url = URL.createObjectURL(blob);
   const provisional = document.createElement('div');
-  provisional.className = 'msj mio pendiente' + (k === 'foto' ? ' con-foto' : '');
+  provisional.className = 'msj mio pendiente' + (k === 'foto' || k === 'gif' ? ' con-foto' : '');
   provisional.dataset.c = c;
-  if (k === 'foto') {
+  if (k === 'foto' || k === 'gif') {
     const img = document.createElement('img'); img.className = 'foto'; img.src = url; img.alt = 'Foto';
     if (extra.w && extra.h) { img.width = extra.w; img.height = extra.h; }
     provisional.append(img);
@@ -1586,6 +1606,81 @@ const zoomVisor = (() => {
 })();
 $('#visorGuardar').onclick = () => { if (fotoEnVisor) guardarAdjunto(fotoEnVisor); };
 
+/* ---------- GIFs ----------
+   Todo pasa por la función «gifs» de Supabase: GIPHY no ve tu IP, y al enviar uno
+   se descarga y se manda cifrado, así tu colega lo recibe de tu servidor y no de GIPHY. */
+async function funcionGifs(cuerpo, binario = false) {
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/gifs`, {
+    method: 'POST', headers: cabeceras(), body: JSON.stringify(cuerpo), cache: 'no-store', referrerPolicy: 'no-referrer'
+  });
+  if (!r.ok) {
+    let d = ''; try { d = (await r.json()).error || ''; } catch {}
+    throw new Error(d || (r.status === 404 ? 'Falta crear la función «gifs» en Supabase' : `Error ${r.status}`));
+  }
+  return binario ? r.blob() : r.json();
+}
+let gifConsulta = '', gifDesde = 0, gifMas = false, gifCargando = false, gifGen = 0, relojGif = null;
+let previasGif = [];
+function abrirPanelGif() {
+  $('#gifBuscar').value = '';
+  $('#panelGif').classList.remove('oculto');
+  cargarGifs('', true);
+}
+function cerrarPanelGif() {
+  $('#panelGif').classList.add('oculto'); $('#gifBuscar').blur();
+  gifGen++;
+  for (const u of previasGif) URL.revokeObjectURL(u);
+  previasGif = []; $('#gifRejilla').replaceChildren();
+}
+async function cargarGifs(q, nuevo) {
+  if (!nuevo && (gifCargando || !gifMas)) return;
+  const gen = nuevo ? ++gifGen : gifGen;
+  if (nuevo) { gifConsulta = q; gifDesde = 0; gifMas = false; $('#gifRejilla').replaceChildren(); $('#gifRejilla').scrollTop = 0; }
+  gifCargando = true; $('#gifNota').textContent = 'Cargando…';
+  try {
+    const res = await funcionGifs({ accion: q ? 'buscar' : 'tendencias', q, offset: gifDesde });
+    if (gen !== gifGen) return;
+    gifDesde += res.lista.length; gifMas = !!res.mas;
+    for (const g of res.lista) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.style.aspectRatio = `${g.w} / ${g.h}`;
+      const img = document.createElement('img'); img.alt = 'GIF';
+      b.append(img);
+      funcionGifs({ accion: 'archivo', u: g.p }, true).then(bl => {
+        if (gen !== gifGen) return;
+        const u = URL.createObjectURL(bl); previasGif.push(u); img.src = u;
+      }).catch(() => {});
+      b.onclick = () => enviarGif(g);
+      $('#gifRejilla').append(b);
+    }
+    $('#gifNota').textContent = !$('#gifRejilla').childElementCount ? 'No hay resultados' : '';
+  } catch (e) {
+    if (gen === gifGen) $('#gifNota').textContent = e.message || 'No se pudieron cargar los GIF';
+  } finally {
+    if (gen === gifGen) gifCargando = false;
+  }
+}
+$('#gifBuscar').addEventListener('input', e => {
+  clearTimeout(relojGif);
+  relojGif = setTimeout(() => cargarGifs(e.target.value.trim(), true), 450); // espera a que termines de escribir
+});
+$('#gifRejilla').addEventListener('scroll', e => {
+  const r = e.target;
+  if (r.scrollHeight - r.scrollTop - r.clientHeight < 200) cargarGifs(gifConsulta, false);
+}, { passive: true });
+$('#gifCerrar').onclick = cerrarPanelGif;
+$('#panelGif').onclick = e => { if (e.target.id === 'panelGif') cerrarPanelGif(); };
+async function enviarGif(g) {
+  cerrarPanelGif();
+  try {
+    const bl = await funcionGifs({ accion: 'archivo', u: g.f }, true);
+    if (bl.size > 1400000) throw new Error('grande');
+    const tipo = /^image\/(webp|gif)$/.test(bl.type) ? bl.type : 'image/webp';
+    await enviarAdjunto(new Blob([bl], { type: tipo }), 'gif', { w: g.w, h: g.h });
+  } catch { estado('No se pudo enviar el GIF', true); }
+}
+$('#opGif').onclick = () => { menuFoto.classList.add('oculto'); abrirPanelGif(); };
+
 /* ---------- Audio ---------- */
 const MAX_AUDIO = 180;
 let grabador = null, cancelarAudio = false, relojGrab = null;
@@ -1869,7 +1964,7 @@ function menuMensaje(id) {
     ops.push({ texto: 'Copiar', accion: () => navigator.clipboard?.writeText(m.t).then(() => estado('Copiado')).catch(() => {}) });
     if (mio && !reg.eliminado) ops.push({ texto: 'Editar', accion: () => empezarEdicion(id) });
   } else {
-    ops.push({ texto: m.k === 'foto' ? 'Guardar foto en el móvil' : 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
+    ops.push({ texto: { foto: 'Guardar foto en el móvil', gif: 'Guardar GIF en el móvil' }[m.k] || 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
     if (m.k === 'foto' && mio && !reg.eliminado) ops.push({ texto: m.t ? 'Editar comentario' : 'Añadir comentario', accion: () => empezarEdicion(id) });
   }
   ops.push({
@@ -1967,7 +2062,7 @@ function puedeEditar(id) {
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
     const conFoto = e.target.closest('.msj.con-foto');
-    if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora')) abrirVisor(Number(conFoto.dataset.id));
+    if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora') && mensajes.get(Number(conFoto.dataset.id))?.m.k === 'foto') abrirVisor(Number(conFoto.dataset.id));
   }, true);
 })();
 
@@ -1975,7 +2070,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.3';
+const VERSION = '4.5';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2421,7 +2516,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
-  cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji();
+  cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji(); cerrarPanelGif();
   menuFoto.classList.add('oculto');
   for (const s of ['#chat', '#ajustes', '#galeria', '#entrada', '#bloqueo']) $(s).classList.add('oculto');
   if (pinResolver) terminarPin(null);
@@ -2484,16 +2579,21 @@ function cierreEmergencia() {
   try { window.close(); } catch {}
 }
 // Boca abajo: la gravedad apunta hacia la pantalla durante medio segundo
-let bocaAbajoDesde = 0;
 window.addEventListener('devicemotion', e => {
-  if (!enElChat()) { bocaAbajoDesde = 0; return; }
   const g = e.accelerationIncludingGravity;
   if (!g || g.z == null) return;
-  const z = g.z * SIGNO_GRAVEDAD;
-  if (z < -8 && Math.abs(g.x) < 4 && Math.abs(g.y) < 4) {
-    if (!bocaAbajoDesde) bocaAbajoDesde = Date.now();
-    else if (Date.now() - bocaAbajoDesde > 500) { bocaAbajoDesde = 0; cierreEmergencia(); }
-  } else bocaAbajoDesde = 0;
+  comprobarBocaAbajo('gravedad', g.z * SIGNO_GRAVEDAD < -6.5 && Math.abs(g.x) < 6 && Math.abs(g.y) < 6);
+});
+const bocaAbajo = { gravedad: 0, giro: 0 }; // cada sensor lleva su propia cuenta
+function comprobarBocaAbajo(sensor, abajo) {
+  if (!enElChat() || !abajo) { bocaAbajo[sensor] = 0; return; }
+  if (!bocaAbajo[sensor]) bocaAbajo[sensor] = Date.now();
+  else if (Date.now() - bocaAbajo[sensor] > 400) { bocaAbajo.gravedad = bocaAbajo.giro = 0; cierreEmergencia(); }
+}
+// Segundo sensor, por si el móvil no da la gravedad: inclinación de más de 140°
+window.addEventListener('deviceorientation', e => {
+  if (e.beta == null) return;
+  comprobarBocaAbajo('giro', Math.abs(e.beta) > 140 && Math.abs(e.gamma ?? 0) < 40);
 });
 // En el iPhone el sensor necesita permiso, que solo se puede pedir tras un toque
 document.addEventListener('click', () => { if (ES_IOS) pedirSensor(); }, { once: true, capture: true });
