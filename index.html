@@ -1239,7 +1239,7 @@ function crearElemento(id, m) {
   }
   const h = document.createElement('div'); h.className = 'hora';
   h.textContent = (m.e ? 'editado · ' : '') + fmtHora(m.ts);
-  if (mio && id && esAdmin()) { const c = document.createElement('span'); c.className = 'check'; h.append(c); }
+  if (mio && id) { const c = document.createElement('span'); c.className = 'check'; c.textContent = '✓'; c.title = 'Enviado correctamente'; h.append(c); }
   b.append(h);
   return b;
 }
@@ -3487,6 +3487,7 @@ function puedeEditar(id) {
       } else estado('Ese mensaje ya no existe');
       return;
     }
+    if (e.target.closest('.hora .check') && !esAdmin()) { estado('Enviado correctamente'); return; }
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
     const oculta = e.target.closest('.msj.con-oculta');
@@ -3508,7 +3509,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.1';
+const VERSION = '6.2';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4019,7 +4020,8 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
-  ['6.1', ['Escudo en el chat, arriba junto a los ajustes: de un toque desactiva los avisos, activa el PIN y la portada de ajustes. Si tiene un punto rojo, falta algo por proteger; en verde, está todo.',
+  ['6.2', ['Tus mensajes llevan un ✓ cuando se han enviado correctamente (tócalo para verlo). Solo indica que el envío fue bien: no dice si al otro le ha llegado ni si lo ha leído.']],
+  ['6.1', ['Escudo en el chat, arriba junto a los ajustes: de un toque desactiva los avisos, activa el PIN y la portada de ajustes. Si tiene un punto rojo, falta algo por proteger; si lleva un ✓, está todo.',
            'Tras cada actualización verás aquí lo nuevo.']],
   ['6.0', ['Doble toque en un mensaje para reaccionar. Salen primero tus reacciones más usadas; con «+» eliges cualquier otra.']],
   ['5.9', ['Ajustes → Privacidad → «Ocultar fotos y vídeos en el chat»: en el chat solo se ve un icono y al tocarlo se abre.']],
