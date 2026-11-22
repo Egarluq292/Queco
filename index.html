@@ -419,6 +419,27 @@
   .msj .pie { padding: 4px 8px 0; }
 
   /* Visor de fotos */
+  /* Vídeos */
+  .videoMini { position: relative; display: block; width: 240px; max-width: 100%; border-radius: 12px; overflow: hidden; }
+  .videoMini .foto { border-radius: 0; min-height: 120px; background: #111; }
+  .videoMini .play, .galCelda .play {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(0,0,0,.55); display: grid; place-items: center; pointer-events: none;
+  }
+  .videoMini .play svg, .galCelda .play svg { width: 26px; height: 26px; fill: #fff; margin-left: 3px; }
+  .galCelda .play { width: 34px; height: 34px; } .galCelda .play svg { width: 18px; height: 18px; }
+  .durVideo { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 99px; background: rgba(0,0,0,.6); color: #fff; font-size: 11.5px; pointer-events: none; font-variant-numeric: tabular-nums; }
+  #visorVideo { position: fixed; inset: 0; z-index: 25; background: #000; display: grid; grid-template-rows: 1fr auto; }
+  #visorVideo .zona { position: relative; min-height: 0; min-width: 0; padding-top: env(safe-area-inset-top); }
+  #visorVideo video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #videoCarga { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 8px 16px; border-radius: 99px; background: rgba(0,0,0,.7); color: #fff; font-size: 14px; }
+  #prepVideo .grupoBotones { padding: 16px; gap: 10px; }
+  #prepVideo video { width: 100%; max-height: 38vh; border-radius: 10px; background: #000; }
+  #prepVideo h3 { margin: 0; font-size: 16px; text-align: center; }
+  #prepVideoInfo { font-size: 14px; color: var(--suave); text-align: center; }
+  .barraProgreso { height: 6px; border-radius: 3px; background: var(--borde); overflow: hidden; }
+  .barraProgreso i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .2s; }
+  #prepVideoEnviar { background: var(--acento); color: var(--acento-txt); border-radius: 12px; font-weight: 600; }
   #visor { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.94); display: grid; grid-template-rows: 1fr auto; }
   #visor .zona { display: grid; place-items: center; padding: 16px; min-height: 0; overflow: hidden; touch-action: none; position: relative; }
   #visor img { max-width: 100%; max-height: 100%; border-radius: 8px; transform-origin: 0 0; will-change: transform; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -571,7 +592,8 @@
     <div class="barra" id="barraNormal">
       <button class="redondo claro" id="adjuntar" aria-label="Foto"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
       <input type="file" id="archivoCamara" accept="image/*" capture="environment" class="oculto">
-      <input type="file" id="archivoGaleria" accept="image/*" multiple class="oculto">
+      <input type="file" id="archivoGaleria" accept="image/*,video/*" multiple class="oculto">
+      <input type="file" id="archivoVideo" accept="video/*" capture="environment" class="oculto">
       <textarea id="texto" rows="1" maxlength="4000" placeholder="Escribe un mensaje"></textarea>
       <button class="redondo" id="accion" aria-label="Grabar audio"></button>
     </div>
@@ -590,7 +612,7 @@
     <div class="titulo">Fotos y audios</div>
     <span></span>
   </header>
-  <div class="segmentos" id="segGaleria"><button data-v="fotos" class="activo">Fotos</button><button data-v="audios">Audios</button></div>
+  <div class="segmentos" id="segGaleria"><button data-v="fotos" class="activo">Fotos y vídeos</button><button data-v="audios">Audios</button></div>
   <div id="galeriaCuerpo"></div>
 </section>
 
@@ -688,7 +710,8 @@
 <!-- Menú de foto -->
 <div id="menuFoto" class="oculto">
   <button type="button" id="opCamara">Hacer foto</button>
-  <button type="button" id="opGaleria">Elegir de la galería</button>
+  <button type="button" id="opVideo">Grabar vídeo</button>
+  <button type="button" id="opGaleria">Fotos y vídeos de la galería</button>
   <button type="button" id="opGif">Enviar un GIF</button>
 </div>
 
@@ -799,6 +822,30 @@
   </div>
   <div class="edFila" id="edColoresTexto"></div>
   <textarea id="edTxtEntrada" rows="1" maxlength="300" placeholder="Escribe…" autocapitalize="sentences"></textarea>
+</div>
+
+<!-- Visor de vídeos -->
+<div id="visorVideo" class="oculto">
+  <div class="zona"><video playsinline controls preload="auto"></video><span id="videoCarga" class="oculto"></span></div>
+  <div class="camBarra">
+    <button type="button" class="redondo claro" id="videoCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <span></span>
+    <button type="button" class="redondo claro" id="videoGuardar" aria-label="Guardar en el móvil"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM4 19h16v2H4z"/></svg></button>
+  </div>
+</div>
+
+<!-- Preparar y enviar un vídeo -->
+<div id="prepVideo" class="velo oculto">
+  <div class="hoja">
+    <div class="grupoBotones">
+      <h3 id="prepVideoTitulo">Enviar vídeo</h3>
+      <video playsinline muted></video>
+      <div id="prepVideoInfo"></div>
+      <div class="barraProgreso oculto" id="prepVideoBarra"><i></i></div>
+      <button type="button" id="prepVideoEnviar">Enviar</button>
+    </div>
+    <button class="cancelar" id="prepVideoCancelar">Cancelar</button>
+  </div>
 </div>
 
 <!-- Visor de fotos -->
@@ -1063,6 +1110,7 @@ function previa(m) {
   if (m.k === 'foto') return '📷 ' + (m.t ? sinMarcas(m.t).slice(0, 120) : 'Foto');
   if (m.k === 'gif') return '🎞️ GIF';
   if (m.k === 'audio') return '🎤 Audio';
+  if (m.k === 'video') return '🎬 Vídeo';
   return sinMarcas(m.t || '').slice(0, 140);
 }
 function crearCita(r) {
@@ -1091,6 +1139,15 @@ function crearElemento(id, m) {
     cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; else img.alt = 'Foto no disponible'; });
     b.append(img);
     if (m.t) { const pie = document.createElement('div'); pie.className = 'pie'; pie.append(realzarEmojis(formatear(m.t))); b.append(pie); }
+  } else if (m.k === 'video') {
+    b.classList.add('con-foto', 'con-video');
+    const caja = document.createElement('div'); caja.className = 'videoMini';
+    const img = document.createElement('img'); img.className = 'foto'; img.alt = 'Vídeo'; img.draggable = false;
+    if (m.w && m.h) { img.width = m.w; img.height = m.h; }
+    if (m.po) cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; });
+    const play = document.createElement('span'); play.className = 'play'; play.innerHTML = PLAY_SVG;
+    const dur = document.createElement('span'); dur.className = 'durVideo'; dur.textContent = '🎬 ' + fmtDur(m.s);
+    caja.append(img, play, dur); b.append(caja);
   } else if (m.k === 'audio') {
     const c = document.createElement('div'); c.className = 'cargando'; c.textContent = 'Cargando audio…';
     b.append(c);
@@ -1276,6 +1333,7 @@ async function cargarBorrados() {
     const m = await descifrar(r.datos);
     if (!m) continue;
     if (r.adj && m.a) adjGuardados.set(m.a, r.adj);
+    if (r.po && m.po) adjGuardados.set(m.po, r.po);
     aplicarCambio(r.id, m, r.datos, true);
   }
   if (lista.length) rehacerSeparadores();
@@ -1285,7 +1343,9 @@ async function conservarBorrado(id) {
   if (!reg?.datos) { quitarMensaje(id); return; }
   let adj = null;
   if (reg.m.a) { const r = await cacheAdj.get(reg.m.a); adj = r?.b64 || null; if (adj) adjGuardados.set(reg.m.a, adj); }
-  await guardarBorrado({ sala, id, datos: reg.datos, adj });
+  let po = null;
+  if (reg.m.po) { const r = await cacheAdj.get(reg.m.po); po = r?.b64 || null; if (po) adjGuardados.set(reg.m.po, po); }
+  await guardarBorrado({ sala, id, datos: reg.datos, adj, po });
   reg.eliminado = true;
   marcarEliminado(reg.el);
 }
@@ -1478,11 +1538,12 @@ function limpiarCache() {
 
 /* Guardar en el móvil, solo cuando tú lo pides */
 async function guardarAdjunto(m) {
-  const nombreTipo = { foto: ['La foto', 'Guardar foto'], gif: ['El GIF', 'Guardar GIF'] }[m.k] || ['El audio', 'Guardar audio'];
+  const nombreTipo = { foto: ['La foto', 'Guardar foto'], gif: ['El GIF', 'Guardar GIF'], video: ['El vídeo', 'Guardar vídeo'] }[m.k] || ['El audio', 'Guardar audio'];
   if (!await confirmar(`${nombreTipo[0]} se guardará en tu móvil, fuera de la app.`, nombreTipo[1], false)) return;
-  const r = await cargarAdjunto(m.a, m.m);
+  if (m.k === 'video') estado('Preparando el vídeo…');
+  const r = await (m.k === 'video' ? cargarVideo(m) : cargarAdjunto(m.a, m.m));
   if (!r) { estado('No se pudo guardar', true); return; }
-  const ext = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }[m.m] || 'bin';
+  const ext = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg' }[m.m] || 'bin';
   const f = new Date(m.ts);
   const sello = `${f.getFullYear()}${String(f.getMonth() + 1).padStart(2, '0')}${String(f.getDate()).padStart(2, '0')}-${String(f.getHours()).padStart(2, '0')}${String(f.getMinutes()).padStart(2, '0')}`;
   const nombre = `${m.k}-${sello}.${ext}`;
@@ -1558,6 +1619,7 @@ async function borrarMensaje(id) {
   const reg = mensajes.get(id);
   if (!reg) return;
   await rpc('borrar', { p_sala: sala, p_id: id, p_adj: reg.m.a ?? null });
+  if (reg.m.k === 'video') borrarTrozos([...(reg.m.p || []).slice(1), reg.m.po].filter(Boolean));
 }
 
 /* ---------- Fotos ---------- */
@@ -2228,7 +2290,10 @@ $('#opCamara').onclick = () => { menuFoto.classList.add('oculto'); pedirSensor()
 $('#opGaleria').onclick = () => { menuFoto.classList.add('oculto'); selectorAbierto = true; $('#archivoGaleria').click(); };
 
 async function fotoElegida(input) {
-  const archivos = [...input.files].slice(0, 10 - fotosEd.length); input.value = '';
+  const todos = [...input.files]; input.value = '';
+  const videos = todos.filter(f => f.type.startsWith('video/'));
+  const archivos = todos.filter(f => !f.type.startsWith('video/')).slice(0, 10 - fotosEd.length);
+  if (videos.length) encolarVideos(videos);
   const inicio = fotosEd.length;
   for (const f of archivos) {
     const url = URL.createObjectURL(f);
@@ -2256,10 +2321,10 @@ function pintarGaleria() {
   marcarSegmento('#segGaleria', pestanaGaleria);
   const cuerpo = $('#galeriaCuerpo'); cuerpo.replaceChildren();
   const tipo = pestanaGaleria === 'fotos' ? 'foto' : 'audio';
-  const lista = [...mensajes].filter(([, r]) => r.m.k === tipo).sort((a, b) => b[0] - a[0]);
+  const lista = [...mensajes].filter(([, r]) => r.m.k === tipo || (tipo === 'foto' && r.m.k === 'video')).sort((a, b) => b[0] - a[0]);
   if (!lista.length) {
     const v = document.createElement('p'); v.className = 'galVacio';
-    v.textContent = tipo === 'foto' ? 'Aún no hay fotos en la conversación.' : 'Aún no hay audios en la conversación.';
+    v.textContent = tipo === 'foto' ? 'Aún no hay fotos ni vídeos en la conversación.' : 'Aún no hay audios en la conversación.';
     cuerpo.append(v); return;
   }
   let mes = '', rejilla = null;
@@ -2270,7 +2335,15 @@ function pintarGaleria() {
       const t = document.createElement('div'); t.className = 'galMes'; t.textContent = mm; cuerpo.append(t);
       if (tipo === 'foto') { rejilla = document.createElement('div'); rejilla.className = 'galRejilla'; cuerpo.append(rejilla); }
     }
-    if (tipo === 'foto') {
+    if (m.k === 'video') {
+      const b = document.createElement('div'); b.className = 'galCelda'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Vídeo'); b.dataset.id = id;
+      const img = document.createElement('img'); img.alt = '';
+      if (m.po) cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; });
+      const play = document.createElement('span'); play.className = 'play'; play.innerHTML = PLAY_SVG;
+      const dur = document.createElement('span'); dur.className = 'durVideo'; dur.textContent = fmtDur(m.s);
+      b.append(img, play, dur); b.onclick = () => abrirVideo(id);
+      rejilla.append(b);
+    } else if (tipo === 'foto') {
       const b = document.createElement('div'); b.className = 'galCelda'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Foto'); b.dataset.id = id;
       const img = document.createElement('img'); img.alt = '';
       cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; });
@@ -2306,7 +2379,7 @@ function menuGaleria(id) {
   const { m } = reg, mio = m.d === disp;
   const ops = [
     { texto: 'Abrir en el chat', accion: () => abrirEnChat(id) },
-    { texto: m.k === 'foto' ? 'Guardar foto en el móvil' : 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) },
+    { texto: { foto: 'Guardar foto en el móvil', video: 'Guardar vídeo en el móvil' }[m.k] || 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) },
     { texto: 'Eliminar para mí', peligro: true,
       nota: mio && !reg.eliminado ? 'Desaparecerá solo de tu móvil. Tu colega lo seguirá viendo.' : 'Desaparecerá solo de tu móvil.',
       accion: () => { ocultarParaMi(id); pintarGaleria(); } }
@@ -2473,6 +2546,254 @@ async function editarFotoDelChat(m) {
     agregarFoto(c, 0);
   } catch { estado('No se pudo abrir la foto', true); }
 }
+
+/* ---------- Vídeos ----------
+   El vídeo se comprime en el propio móvil (a 720p, unos 9 MB por minuto), se cifra en trozos
+   y cada trozo va al servidor por separado. La portada (primer fotograma) viaja aparte. */
+const VIDEO_MAX_S = 300;                    // 5 minutos
+const VIDEO_DIRECTO = 8 * 1024 * 1024;      // un mp4 pequeño se envía tal cual
+const VIDEO_PARTE = 1400 * 1024;            // cada trozo cabe en una subida
+const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+const fmtMB = b => (b / 1048576).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' MB';
+function tipoGrabacionVideo() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  return ['video/mp4;codecs=avc1.42E01F,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    .find(t => MediaRecorder.isTypeSupported?.(t)) || null;
+}
+function esperarEvento(el, ev, ms = 15000) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error('tiempo')), ms);
+    el.addEventListener(ev, () => { clearTimeout(t); res(); }, { once: true });
+    el.addEventListener('error', () => { clearTimeout(t); rej(new Error('vídeo')); }, { once: true });
+  });
+}
+/* Portada: un fotograma del principio, pequeño, en JPEG */
+async function portadaVideo(url) {
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+  await esperarEvento(v, 'loadeddata');
+  v.currentTime = Math.min(0.3, (v.duration || 1) / 2);
+  await esperarEvento(v, 'seeked').catch(() => {});
+  const k = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(v.videoWidth * k)); c.height = Math.max(1, Math.round(v.videoHeight * k));
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .7));
+  v.removeAttribute('src'); v.load();
+  return { blob, w: c.width, h: c.height };
+}
+/* Recomprime reproduciendo el vídeo una vez (tarda lo que dura) */
+async function comprimirVideo(v, duracion, alProgreso, senal) {
+  const tipo = tipoGrabacionVideo();
+  const lienzoOk = typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.captureStream;
+  if (!tipo || !lienzoOk) return null;
+  const k = Math.min(1, 1280 / Math.max(v.videoWidth, v.videoHeight));
+  const W = Math.round(v.videoWidth * k / 2) * 2, H = Math.round(v.videoHeight * k / 2) * 2;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const pistas = [...c.captureStream(30).getVideoTracks()];
+  let ac = null;
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    await ac.resume();
+    const fuente = ac.createMediaElementSource(v), destino = ac.createMediaStreamDestination();
+    fuente.connect(destino); // al grabador, no a los altavoces: se comprime en silencio
+    pistas.push(...destino.stream.getAudioTracks());
+  } catch { v.muted = true; }
+  const grabador = new MediaRecorder(new MediaStream(pistas), { mimeType: tipo, videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 });
+  const trozos = [];
+  grabador.ondataavailable = e => { if (e.data && e.data.size) trozos.push(e.data); };
+  const parado = new Promise(r => { grabador.onstop = r; });
+  v.currentTime = 0;
+  grabador.start(1000);
+  await v.play();
+  await new Promise(res => {
+    const pintar = () => {
+      if (senal.cancelado || v.ended) { res(); return; }
+      ctx.drawImage(v, 0, 0, W, H);
+      alProgreso(duracion ? v.currentTime / duracion : 0);
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(pintar); else requestAnimationFrame(pintar);
+    };
+    v.addEventListener('ended', res, { once: true });
+    pintar();
+  });
+  v.pause();
+  grabador.stop(); await parado;
+  pistas.forEach(p => p.stop());
+  ac?.close().catch(() => {});
+  if (senal.cancelado) return null;
+  return { blob: new Blob(trozos, { type: tipo.split(';')[0] }), w: W, h: H };
+}
+async function subirTrozos(blob, alProgreso, senal) {
+  const n = Math.max(1, Math.ceil(blob.size / VIDEO_PARTE)), ids = new Array(n);
+  let siguiente = 0, hechos = 0;
+  const trabajador = async () => {
+    while (siguiente < n && !senal.cancelado) {
+      const i = siguiente++;
+      const u8 = new Uint8Array(await blob.slice(i * VIDEO_PARTE, (i + 1) * VIDEO_PARTE).arrayBuffer());
+      ids[i] = await rpc('subir', { p_sala: sala, p_datos: aB64(await cifrarBytes(u8, ':adj')), p_ttl: temporal || null });
+      alProgreso(++hechos / n);
+    }
+  };
+  try { await Promise.all([trabajador(), trabajador(), trabajador()]); }
+  catch (e) { borrarTrozos(ids.filter(Boolean)); throw e; }
+  if (senal.cancelado) { borrarTrozos(ids.filter(Boolean)); return null; }
+  return ids;
+}
+function borrarTrozos(ids) {
+  for (const id of ids) rpc('borrar', { p_sala: sala, p_id: -1, p_adj: id }).catch(() => {});
+}
+function cargarVideo(m, alProgreso) {
+  const id = m.a;
+  if (!cacheAdj.has(id)) cacheAdj.set(id, (async () => {
+    try {
+      const ids = m.p || [m.a], guardado = adjGuardados.get(id);
+      const res = new Array(ids.length);
+      let siguiente = 0, hechos = 0;
+      const trabajador = async () => {
+        while (siguiente < ids.length) {
+          const i = siguiente++;
+          const b64 = (Array.isArray(guardado) && guardado[i]) || await rpc('bajar', { p_sala: sala, p_id: ids[i] });
+          if (!b64) throw new Error('falta');
+          const u = await descifrarBytes(deB64(b64), ':adj');
+          if (!u) throw new Error('clave');
+          res[i] = { u, b64 };
+          alProgreso?.(++hechos / ids.length);
+        }
+      };
+      await Promise.all([trabajador(), trabajador(), trabajador(), trabajador()]);
+      const blob = new Blob(res.map(r => r.u), { type: m.m || 'video/mp4' });
+      return { url: URL.createObjectURL(blob), blob, b64: res.map(r => r.b64) };
+    } catch { cacheAdj.delete(id); return null; }
+  })());
+  return cacheAdj.get(id);
+}
+
+/* Pantalla de preparación: muestra el vídeo, comprime si hace falta y lo sube */
+const colaVideos = [];
+let prepActual = null;
+function encolarVideos(archivos) {
+  colaVideos.push(...archivos);
+  if (!prepActual) siguienteVideo();
+}
+async function siguienteVideo() {
+  const file = colaVideos.shift();
+  if (!file) { prepActual = null; return; }
+  // Un <video> nuevo cada vez: el sonido solo se puede conectar al compresor una vez por elemento
+  const v = document.createElement('video'); v.playsInline = true; v.setAttribute('playsinline', '');
+  $('#prepVideo video').replaceWith(v);
+  const url = URL.createObjectURL(file);
+  prepActual = { file, url, senal: { cancelado: false }, enviando: false };
+  v.muted = true; v.src = url;
+  $('#prepVideoTitulo').textContent = 'Enviar vídeo';
+  $('#prepVideoBarra').classList.add('oculto'); $('#prepVideoBarra i').style.width = '0';
+  $('#prepVideoEnviar').disabled = true; $('#prepVideoEnviar').classList.remove('oculto');
+  $('#prepVideoInfo').textContent = 'Leyendo el vídeo…';
+  $('#prepVideo').classList.remove('oculto');
+  try { await esperarEvento(v, 'loadedmetadata'); }
+  catch { $('#prepVideoInfo').textContent = 'Este vídeo no se puede abrir en el móvil.'; return; }
+  const d = v.duration;
+  prepActual.duracion = isFinite(d) ? d : 0;
+  if (prepActual.duracion > VIDEO_MAX_S + 1) {
+    $('#prepVideoInfo').textContent = `Dura ${fmtDur(d)}. El máximo es ${fmtDur(VIDEO_MAX_S)}: recórtalo en la galería del móvil y vuelve a intentarlo.`;
+    return;
+  }
+  prepActual.directo = file.size <= VIDEO_DIRECTO && /^video\/mp4/.test(file.type);
+  if (!prepActual.directo && !tipoGrabacionVideo() && file.size > 25 * 1048576) {
+    $('#prepVideoInfo').textContent = 'Este móvil no puede comprimir vídeos y este es demasiado grande para enviarlo tal cual.';
+    return;
+  }
+  $('#prepVideoInfo').textContent = `${fmtDur(d)} · ${fmtMB(file.size)} · ` + (prepActual.directo
+    ? 'se enviará tal cual.'
+    : 'se comprimirá antes de enviarlo. Tarda lo mismo que dura el vídeo: no salgas de la app.');
+  $('#prepVideoEnviar').disabled = false;
+}
+function progresoPrep(texto, p) {
+  $('#prepVideoInfo').textContent = texto;
+  $('#prepVideoBarra').classList.remove('oculto');
+  $('#prepVideoBarra i').style.width = Math.round(Math.min(1, Math.max(0, p)) * 100) + '%';
+}
+function cerrarPrep() {
+  const p = prepActual;
+  if (p) { p.senal.cancelado = true; URL.revokeObjectURL(p.url); }
+  const v = $('#prepVideo video'); v.pause(); v.removeAttribute('src'); v.load();
+  $('#prepVideo').classList.add('oculto');
+  prepActual = null;
+}
+$('#prepVideoCancelar').onclick = () => { cerrarPrep(); colaVideos.length = 0; };
+$('#prepVideoEnviar').onclick = async () => {
+  const p = prepActual; if (!p || p.enviando) return;
+  p.enviando = true;
+  $('#prepVideoEnviar').classList.add('oculto');
+  const v = $('#prepVideo video');
+  try {
+    let blob = p.file, mime = p.file.type || 'video/mp4', w = v.videoWidth, h = v.videoHeight;
+    if (!p.directo) {
+      $('#prepVideoTitulo').textContent = 'Comprimiendo…';
+      v.muted = false; // el sonido va al compresor, no a los altavoces
+      const r = await comprimirVideo(v, p.duracion, x => progresoPrep(`Comprimiendo… ${Math.round(x * 100)} %`, x), p.senal);
+      if (p.senal.cancelado) return;
+      if (r) { blob = r.blob; mime = blob.type; w = r.w; h = r.h; }
+      else if (p.file.size > 25 * 1048576) throw new Error('No se pudo comprimir el vídeo');
+    }
+    $('#prepVideoTitulo').textContent = 'Enviando…';
+    progresoPrep('Preparando…', 0);
+    const urlFinal = URL.createObjectURL(blob);
+    const portada = await portadaVideo(urlFinal).catch(() => null);
+    let po = null;
+    if (portada?.blob) {
+      const u8 = new Uint8Array(await portada.blob.arrayBuffer());
+      po = await rpc('subir', { p_sala: sala, p_datos: aB64(await cifrarBytes(u8, ':adj')), p_ttl: temporal || null });
+    }
+    const ids = await subirTrozos(blob, x => progresoPrep(`Enviando… ${Math.round(x * 100)} % de ${fmtMB(blob.size)}`, x), p.senal);
+    if (!ids) { if (po) borrarTrozos([po]); return; }
+    cacheAdj.set(ids[0], Promise.resolve({ url: urlFinal, blob, b64: null }));
+    await enviarMensaje({ k: 'video', a: ids[0], p: ids, m: mime, po, w: portada?.w || w, h: portada?.h || h, s: Math.round(p.duracion) });
+    await leer();
+    cerrarPrep();
+    siguienteVideo();
+  } catch (e) {
+    if (p.senal.cancelado) return;
+    $('#prepVideoTitulo').textContent = 'No se pudo enviar';
+    $('#prepVideoInfo').textContent = (e && e.message && !/fetch|rpc|\d{3}/i.test(e.message) ? e.message + '. ' : '') + 'Comprueba la conexión y vuelve a intentarlo.';
+    $('#prepVideoBarra').classList.add('oculto');
+    $('#prepVideoEnviar').classList.remove('oculto'); $('#prepVideoEnviar').textContent = 'Reintentar';
+    p.enviando = false;
+  }
+};
+// Si se sale de la app mientras se comprime, el vídeo se congela: mejor cancelar y avisar
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && prepActual?.enviando && !prepActual.senal.cancelado && $('#prepVideoTitulo').textContent.startsWith('Comprimiendo')) {
+    cerrarPrep(); colaVideos.length = 0;
+    setTimeout(() => estado('Se canceló el vídeo porque saliste de la app', true), 500);
+  }
+});
+
+/* Ver un vídeo de la conversación */
+let videoEnVisor = null;
+async function abrirVideo(id) {
+  const reg = mensajes.get(id); if (!reg) return;
+  const m = reg.m; videoEnVisor = m;
+  const el = $('#visorVideo video'), carga = $('#videoCarga');
+  el.removeAttribute('src'); el.removeAttribute('poster');
+  if (m.po) cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r && videoEnVisor === m) el.poster = r.url; });
+  carga.textContent = 'Cargando vídeo…'; carga.classList.remove('oculto');
+  $('#visorVideo').classList.remove('oculto');
+  const r = await cargarVideo(m, x => { if (videoEnVisor === m) carga.textContent = `Cargando vídeo… ${Math.round(x * 100)} %`; });
+  if (videoEnVisor !== m) return;
+  if (!r) { carga.textContent = 'Vídeo no disponible'; return; }
+  carga.classList.add('oculto');
+  el.src = r.url;
+  el.play().catch(() => {});
+}
+function cerrarVideo() {
+  const el = $('#visorVideo video'); el.pause(); el.removeAttribute('src'); el.load();
+  $('#visorVideo').classList.add('oculto'); videoEnVisor = null;
+}
+$('#videoCerrar').onclick = cerrarVideo;
+$('#videoGuardar').onclick = () => { if (videoEnVisor) guardarAdjunto(videoEnVisor); };
+$('#opVideo').onclick = () => { menuFoto.classList.add('oculto'); selectorAbierto = true; $('#archivoVideo').click(); };
+$('#archivoVideo').onchange = e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) encolarVideos(f); };
 
 /* ---------- GIFs ----------
    Todo pasa por la función «gifs» de Supabase: GIPHY no ve tu IP, y al enviar uno
@@ -2940,7 +3261,7 @@ function menuMensaje(id) {
     ops.push({ texto: 'Copiar', accion: () => navigator.clipboard?.writeText(m.t).then(() => estado('Copiado')).catch(() => {}) });
     if (mio && !reg.eliminado) ops.push({ texto: 'Editar', accion: () => empezarEdicion(id) });
   } else {
-    ops.push({ texto: { foto: 'Guardar foto en el móvil', gif: 'Guardar GIF en el móvil' }[m.k] || 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
+    ops.push({ texto: { foto: 'Guardar foto en el móvil', gif: 'Guardar GIF en el móvil', video: 'Guardar vídeo en el móvil' }[m.k] || 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
     if (m.k === 'foto' && mio && !reg.eliminado) ops.push({ texto: m.t ? 'Editar comentario' : 'Añadir comentario', accion: () => empezarEdicion(id) });
     if (m.k === 'foto') ops.push({ texto: 'Editar foto y reenviar', accion: () => editarFotoDelChat(m) });
   }
@@ -3047,7 +3368,11 @@ function puedeEditar(id) {
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
     const conFoto = e.target.closest('.msj.con-foto');
-    if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora') && mensajes.get(Number(conFoto.dataset.id))?.m.k === 'foto') abrirVisor(Number(conFoto.dataset.id));
+    if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora')) {
+      const k = mensajes.get(Number(conFoto.dataset.id))?.m.k;
+      if (k === 'foto') abrirVisor(Number(conFoto.dataset.id));
+      else if (k === 'video') abrirVideo(Number(conFoto.dataset.id));
+    }
   }, true);
 })();
 
@@ -3055,7 +3380,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.7';
+const VERSION = '5.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3283,7 +3608,7 @@ async function desbloquear() {
 
 function cerrarConversacion() {
   clearInterval(temporizador);
-  cerrarCamara(); cerrarVisor(); cerrarHoja();
+  cerrarCamara(); cerrarVisor(); cerrarVideo(); cerrarPrep(); colaVideos.length = 0; cerrarHoja();
   if (editandoId !== null) terminarEdicion();
   terminarRespuesta(); ocultarNuevos(); salirSeleccion(); salirBusqueda();
   $('#estadoOtro').classList.add('oculto');
@@ -3569,6 +3894,7 @@ window.addEventListener('popstate', () => {
   if (!$('#portada').classList.contains('oculto')) { if (paginaPortada !== 'inicio') pintarPagina('inicio'); return; }
   if (seleccion && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto')) { salirSeleccion(); return; }
   if (busqueda && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto') && $('#galeria').classList.contains('oculto')) { salirBusqueda(); return; }
+  if (!$('#visorVideo').classList.contains('oculto')) { cerrarVideo(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#editorFotos').classList.contains('oculto')) { if (!atrasEditorEd()) cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
