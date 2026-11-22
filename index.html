@@ -419,6 +419,12 @@
   .msj .pie { padding: 4px 8px 0; }
 
   /* Visor de fotos */
+  /* Fotos ocultas hasta tocarlas */
+  .fotoOculta { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px 2px; cursor: pointer; min-width: 170px; }
+  .icOculta { width: 42px; height: 42px; flex: none; border-radius: 10px; display: grid; place-items: center; background: rgba(127,127,127,.18); }
+  .icOculta svg { width: 22px; height: 22px; fill: currentColor; opacity: .8; }
+  .fotoOculta b { display: block; font-weight: 600; }
+  .fotoOculta small { display: block; font-size: .78em; opacity: .7; }
   /* Vídeos */
   .videoMini { position: relative; display: block; width: 240px; max-width: 100%; border-radius: 12px; overflow: hidden; }
   .videoMini .foto { border-radius: 0; min-height: 120px; background: #111; }
@@ -674,6 +680,12 @@
           <label class="interruptor"><input type="checkbox" id="intPin"><span></span></label>
         </div>
         <div class="ayuda">Pide un PIN de 4 cifras al abrir la app y al volver a ella tras 30 segundos.</div>
+      </div>
+      <div class="opcion">
+        <div class="etq">Ocultar fotos y vídeos en el chat
+          <label class="interruptor"><input type="checkbox" id="intOcultarFotos"><span></span></label>
+        </div>
+        <div class="ayuda">En el chat solo se ve un icono; al tocarlo se abre a pantalla completa. Solo en este móvil: tu colega elige lo suyo.</div>
       </div>
       <div class="opcion">
         <div class="etq">Portada de ajustes al abrir
@@ -1132,7 +1144,18 @@ function crearElemento(id, m) {
   b.className = 'msj' + (mio ? ' mio' : '');
   b.dataset.id = id; b.dataset.ts = m.ts;
   if (m.r && m.r.i) b.append(crearCita(m.r));
-  if (m.k === 'foto' || m.k === 'gif') {
+  if (ajustes.ocultarFotos && (m.k === 'foto' || m.k === 'gif' || m.k === 'video')) {
+    // Foto oculta: solo un icono; al tocarlo se abre a pantalla completa y en el chat sigue oculta
+    b.classList.add('con-oculta');
+    const o = document.createElement('div'); o.className = 'fotoOculta';
+    const ic = document.createElement('span'); ic.className = 'icOculta';
+    ic.innerHTML = m.k === 'video' ? PLAY_SVG : '<svg viewBox="0 0 24 24"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5Z"/></svg>';
+    const tx = document.createElement('span');
+    const nombre = { foto: 'Foto', gif: 'GIF', video: 'Vídeo · ' + fmtDur(m.s) }[m.k];
+    tx.innerHTML = '<b></b><small>Toca para ver</small>'; tx.querySelector('b').textContent = nombre;
+    o.append(ic, tx); b.append(o);
+    if (m.t) { const pie = document.createElement('div'); pie.className = 'pie'; pie.append(realzarEmojis(formatear(m.t))); b.append(pie); }
+  } else if (m.k === 'foto' || m.k === 'gif') {
     b.classList.add('con-foto');
     const img = document.createElement('img'); img.className = 'foto'; img.alt = m.k === 'gif' ? 'GIF' : 'Foto'; img.draggable = false;
     if (m.w && m.h) { img.width = m.w; img.height = m.h; }
@@ -2423,7 +2446,7 @@ function abrirVisor(id, desde = 0) {
     zoomVisor.reiniciar();
     img.src = r.url;
     const ids = idsFotos();
-    $('#visorCuenta').textContent = ids.length > 1 ? `${ids.indexOf(id) + 1} de ${ids.length}` : '';
+    $('#visorCuenta').textContent = ids.length > 1 && ids.includes(id) ? `${ids.indexOf(id) + 1} de ${ids.length}` : '';
     $('#visor').classList.remove('oculto');
     if (desde) { // entra deslizándose desde un lado
       img.style.transition = 'none'; img.style.transform = `translateX(${desde}px)`;
@@ -3367,6 +3390,12 @@ function puedeEditar(id) {
     }
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
+    const oculta = e.target.closest('.msj.con-oculta');
+    if (oculta?.dataset.id && e.target.closest('.fotoOculta')) {
+      const id = Number(oculta.dataset.id), k = mensajes.get(id)?.m.k;
+      if (k === 'video') abrirVideo(id); else if (k) abrirVisor(id);
+      return;
+    }
     const conFoto = e.target.closest('.msj.con-foto');
     if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora')) {
       const k = mensajes.get(Number(conFoto.dataset.id))?.m.k;
@@ -3380,7 +3409,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.8';
+const VERSION = '5.9';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3396,6 +3425,7 @@ function abrirAjustes() {
   $('#intNotif').checked = !!ajustes.notif;
   $('#intPin').checked = pinActivo();
   $('#intPortada').checked = ajustes.portada;
+  $('#intOcultarFotos').checked = !!ajustes.ocultarFotos;
   pintarBlindar();
   $('#nuevoNombre').value = yo || '';
   $('#ajustes').classList.remove('oculto');
@@ -3424,6 +3454,18 @@ $('#blindarBtn').onclick = async () => {
   pintarBlindar();
   navigator.vibrate?.(30);
   estado(pinOk ? 'Todo protegido' : 'Avisos y portada listos; el PIN no se activó', !pinOk);
+};
+$('#intOcultarFotos').onchange = e => {
+  ajustes.ocultarFotos = e.target.checked; guardarAjustes();
+  for (const [id, reg] of mensajes) {
+    if (!['foto', 'gif', 'video'].includes(reg.m.k)) continue;
+    const el = crearElemento(id, reg.m);
+    if (reg.eliminado) marcarEliminado(el);
+    if (reg.el.classList.contains('seleccionado')) el.classList.add('seleccionado');
+    reg.el.replaceWith(el); reg.el = el;
+    if (reacciones.size) pintarReacciones(id);
+  }
+  pintarVistos();
 };
 $('#intConservar').onchange = e => { ajustes.conservar = e.target.checked; guardarAjustes(); };
 $('#cerrarAjustes').onclick = () => $('#ajustes').classList.add('oculto');
