@@ -448,6 +448,10 @@
   .interruptor input:checked + span::after { transform: translateX(20px); }
   .botonFila { background: none; border: 0; width: 100%; text-align: center; padding: 14px 16px; cursor: pointer; color: var(--acento); font-size: 16px; }
   .botonFila.peligro { color: var(--error); }
+  .botonFila.fuerte { font-weight: 600; background: var(--acento); color: var(--acento-txt); border-radius: 12px; width: calc(100% - 20px); margin: 10px 10px 0; }
+  .botonFila.fuerte.hecho { background: none; color: var(--acento); border: 1px solid var(--borde); }
+  #grupoBlindar { padding-bottom: 10px; }
+  #grupoBlindar .ayuda { padding: 8px 14px 0; text-align: center; }
   .grupo .botonFila + .botonFila { border-top: 1px solid var(--borde); }
 
   /* Portada */
@@ -598,6 +602,11 @@
     <span></span>
   </header>
   <div class="ajCuerpo">
+    <div class="grupo" id="grupoBlindar">
+      <button class="botonFila fuerte" id="blindarBtn">Proteger todo de un toque</button>
+      <div class="ayuda" id="ayudaBlindar">Desactiva los avisos, activa el bloqueo con PIN y la portada de ajustes al abrir.</div>
+    </div>
+
     <h2>Apariencia</h2>
     <div class="grupo">
       <div class="opcion">
@@ -3046,7 +3055,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.6';
+const VERSION = '5.7';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3062,11 +3071,35 @@ function abrirAjustes() {
   $('#intNotif').checked = !!ajustes.notif;
   $('#intPin').checked = pinActivo();
   $('#intPortada').checked = ajustes.portada;
+  pintarBlindar();
   $('#nuevoNombre').value = yo || '';
   $('#ajustes').classList.remove('oculto');
 }
 $('#abrirAjustes').onclick = abrirAjustes;
-$('#intPortada').onchange = e => { ajustes.portada = e.target.checked; guardarAjustes(); };
+$('#intPortada').onchange = e => { ajustes.portada = e.target.checked; guardarAjustes(); pintarBlindar(); };
+/* «Proteger todo de un toque»: sin avisos, con PIN y con portada, para no olvidarse de nada */
+const blindado = () => !ajustes.notif && pinActivo() && !!ajustes.portada;
+function pintarBlindar() {
+  const b = $('#blindarBtn'), ok = blindado();
+  b.textContent = ok ? '✓ Todo protegido' : 'Proteger todo de un toque';
+  b.classList.toggle('hecho', ok);
+  const falta = [ajustes.notif && 'desactivar los avisos', !pinActivo() && 'activar el PIN', !ajustes.portada && 'activar la portada de ajustes'].filter(Boolean);
+  $('#ayudaBlindar').textContent = ok
+    ? 'Avisos desactivados, bloqueo con PIN y portada de ajustes al abrir.'
+    : 'Falta ' + (falta.length > 1 ? falta.slice(0, -1).join(', ') + ' y ' + falta.at(-1) : falta[0]) + '.';
+}
+$('#blindarBtn').onclick = async () => {
+  if (blindado()) { estado('Ya está todo protegido'); return; }
+  if (ajustes.notif) { await desuscribirse(); ajustes.notif = false; ayudaNotif('Desactivadas.'); }
+  ajustes.portada = true;
+  guardarAjustes();
+  let pinOk = pinActivo();
+  if (!pinOk) pinOk = await crearPin();
+  $('#intNotif').checked = false; $('#intPortada').checked = true; $('#intPin').checked = pinOk;
+  pintarBlindar();
+  navigator.vibrate?.(30);
+  estado(pinOk ? 'Todo protegido' : 'Avisos y portada listos; el PIN no se activó', !pinOk);
+};
 $('#intConservar').onchange = e => { ajustes.conservar = e.target.checked; guardarAjustes(); };
 $('#cerrarAjustes').onclick = () => $('#ajustes').classList.add('oculto');
 
@@ -3139,7 +3172,7 @@ $('#intNotif').onchange = async e => {
     await desuscribirse(); ajustes.notif = false;
     ayudaNotif('Desactivadas.');
   }
-  guardarAjustes();
+  guardarAjustes(); pintarBlindar();
 };
 
 /* ---------- Sesión y PIN ---------- */
@@ -3192,16 +3225,22 @@ $('#pinOlvido').onclick = async () => {
   $('#errorEntrada').textContent = 'Vuelve a entrar con el código de acceso.';
 };
 
+/* Pide un PIN nuevo dos veces y lo guarda; devuelve si quedó activado */
+async function crearPin() {
+  const p1 = await pedirPin('Elige un PIN de 4 cifras', { cancelable: true });
+  if (p1 === null) { $('#bloqueo').classList.add('oculto'); return false; }
+  const p2 = await pedirPin('Repite el PIN', { cancelable: true });
+  $('#bloqueo').classList.add('oculto');
+  if (p2 === null) return false;
+  if (p2 !== p1) { estado('Los PIN no coinciden', true); return false; }
+  await guardarSesionConPin(p1);
+  return true;
+}
 $('#intPin').onchange = async e => {
   const quiere = e.target.checked;
   if (quiere) {
-    const p1 = await pedirPin('Elige un PIN de 4 cifras', { cancelable: true });
-    if (p1 === null) { $('#bloqueo').classList.add('oculto'); e.target.checked = false; return; }
-    const p2 = await pedirPin('Repite el PIN', { cancelable: true });
-    $('#bloqueo').classList.add('oculto');
-    if (p2 !== p1) { e.target.checked = false; estado('Los PIN no coinciden', true); return; }
-    await guardarSesionConPin(p1);
-    estado('PIN activado');
+    if (await crearPin()) estado('PIN activado'); else e.target.checked = false;
+    pintarBlindar();
   } else {
     const p = await pedirPin('Introduce tu PIN para quitarlo', { cancelable: true });
     $('#bloqueo').classList.add('oculto');
@@ -3211,6 +3250,7 @@ $('#intPin').onchange = async e => {
     if (!crudo) { e.target.checked = true; estado('PIN incorrecto', true); return; }
     localStorage.setItem(ALMACEN, JSON.stringify({ k: aB64(crudo), s: s.s, n: yo }));
     estado('PIN desactivado');
+    pintarBlindar();
   }
 };
 
