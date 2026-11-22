@@ -62,6 +62,7 @@ create table if not exists public.presencia (
   hasta timestamptz not null,
   primary key (sala, disp)
 );
+alter table public.presencia add column if not exists activo timestamptz;
 alter table public.presencia enable row level security;
 revoke all on public.presencia from anon, authenticated;
 
@@ -202,6 +203,24 @@ language sql security definer set search_path = public as $$
   select exists (select 1 from presencia where sala = p_sala and disp <> p_disp and hasta > now());
 $$;
 
+-- «En línea»: el móvil con la app abierta avisa cada pocos segundos
+create or replace function public.latido(p_sala text, p_disp text)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if length(p_sala) <> 64 or length(p_disp) > 64 then raise exception 'petición no válida'; end if;
+  insert into presencia (sala, disp, hasta, activo) values (p_sala, p_disp, now(), now())
+  on conflict (sala, disp) do update set activo = now();
+end $$;
+
+-- Estado del otro: si está escribiendo y cuándo tuvo la app abierta por última vez
+create or replace function public.presencia_otro(p_sala text, p_disp text)
+returns table (escribiendo boolean, ultima timestamptz, ahora timestamptz)
+language sql security definer set search_path = public as $$
+  select coalesce(bool_or(hasta > now()), false), max(activo), now()
+  from presencia where sala = p_sala and disp <> p_disp;
+$$;
+
 -- ===== Permisos =====
 do $$
 declare f text;
@@ -210,7 +229,8 @@ begin
     'leer(text, bigint)', 'enviar(text, text, integer)', 'subir(text, text, integer)',
     'bajar(text, bigint)', 'editar(text, bigint, text)', 'borrar(text, bigint, bigint)',
     'vaciar(text)', 'suscribir(text, text, text, text, text)', 'desuscribir(text)',
-    'escribir(text, text, boolean)', 'escribiendo(text, text)'
+    'escribir(text, text, boolean)', 'escribiendo(text, text)',
+    'latido(text, text)', 'presencia_otro(text, text)'
   ] loop
     execute format('revoke execute on function public.%s from public', f);
     execute format('grant execute on function public.%s to anon', f);
