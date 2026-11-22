@@ -161,6 +161,14 @@
   }
   .msj.pulsado { transform: scale(.97); }
   .msj.pendiente { opacity: .55; }
+  #escribiendoInd {
+    align-self: flex-start; display: flex; align-items: center; gap: 4px;
+    padding: 10px 14px; border-radius: 16px; background: var(--burbuja); border: 1px solid var(--borde);
+  }
+  #escribiendoInd i { width: 7px; height: 7px; border-radius: 50%; background: var(--suave); animation: puntito 1.2s infinite; }
+  #escribiendoInd i:nth-child(2) { animation-delay: .2s; }
+  #escribiendoInd i:nth-child(3) { animation-delay: .4s; }
+  @keyframes puntito { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
   .msj.con-reac { margin-bottom: 16px; position: relative; }
   .reac {
     position: absolute; bottom: -15px; left: 10px; display: flex; gap: 2px; align-items: center;
@@ -683,7 +691,7 @@ const SUPABASE_KEY = 'sb_publishable_d2JVmRdZ6grY54z2KvrR6w_vaqhbMxH';
 
 const SAL = new TextEncoder().encode('susurro/v1/sal-fija');
 const ITERACIONES = 600000;
-const INTERVALO = 4000;
+const INTERVALO = 2000; // cada 2 s con el chat abierto
 const ALMACEN = 'susurro.sesion';
 const AJUSTES = 'susurro.ajustes';
 const ES_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -1118,6 +1126,7 @@ async function leer() {
         aplicarCambio(f.id, m, f.datos || null); cambios = true;
         if (m && m.d === disp) propio = true;
         else if (esNuevo && primeraCarga === false) ajenosNuevos++;
+        if (esNuevo && m && m.d !== disp) $('#escribiendoInd')?.remove();
       }
     } while (filas.length === 200);
     if (cambios) {
@@ -1130,6 +1139,7 @@ async function leer() {
   } catch { estado('Sin conexión con el servidor', true); }
   leyendo = false;
   informarVisto();
+  comprobarEscribiendo();
 }
 
 /* Globito de mensajes nuevos cuando estás leyendo más arriba */
@@ -1143,6 +1153,38 @@ $('#lista').addEventListener('scroll', () => {
   const l = $('#lista');
   if (l.scrollHeight - l.scrollTop - l.clientHeight < 80) { if (nuevosSinVer) ocultarNuevos(); informarVisto(); }
 }, { passive: true });
+
+/* «Escribiendo…»: el móvil de tu colega avisa; solo el administrador lo ve */
+let ultimoAvisoEscribir = 0, avisandoEscribir = false;
+function avisarEscribiendo(activo) {
+  if (esAdmin() || !clave) return;
+  const ahora = Date.now();
+  if (activo && (avisandoEscribir || ahora - ultimoAvisoEscribir < 3000)) return;
+  if (!activo && !ultimoAvisoEscribir) return;
+  ultimoAvisoEscribir = activo ? ahora : 0;
+  avisandoEscribir = true;
+  rpc('escribir', { p_sala: sala, p_disp: disp, p_activo: activo }).catch(() => {}).finally(() => { avisandoEscribir = false; });
+}
+let comprobandoEscritura = false;
+async function comprobarEscribiendo() {
+  if (!esAdmin() || !clave || comprobandoEscritura) return;
+  comprobandoEscritura = true;
+  try { mostrarEscribiendo(!!(await rpc('escribiendo', { p_sala: sala, p_disp: disp }))); }
+  catch { mostrarEscribiendo(false); }
+  comprobandoEscritura = false;
+}
+function mostrarEscribiendo(si) {
+  const lista = $('#lista');
+  let ind = $('#escribiendoInd');
+  if (!si) { ind?.remove(); return; }
+  const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 80;
+  if (!ind) {
+    ind = document.createElement('div'); ind.id = 'escribiendoInd'; ind.setAttribute('aria-label', 'Escribiendo');
+    ind.innerHTML = '<i></i><i></i><i></i>';
+  }
+  lista.append(ind); // siempre el último
+  if (abajo) lista.scrollTop = lista.scrollHeight;
+}
 
 function arrancarSondeo() {
   clearInterval(temporizador);
@@ -1823,6 +1865,7 @@ async function enviar() {
   lista.scrollTop = lista.scrollHeight; ocultarNuevos();
   t.value = ''; ajustar(); terminarRespuesta();
   try {
+    avisarEscribiendo(false);
     await enviarMensaje({ t: txt, c, ...(r ? { r } : {}) });
     leer();
   } catch {
@@ -1867,7 +1910,7 @@ $('#formato').onclick = e => {
   t.setSelectionRange(pre.length + marca.length, pre.length + marca.length + sel.length);
   ajustar();
 };
-$('#texto').addEventListener('input', ajustar);
+$('#texto').addEventListener('input', () => { ajustar(); avisarEscribiendo($('#texto').value.trim() !== ''); });
 actualizarAccion();
 
 /* ---------- Hoja de acciones ---------- */
@@ -2156,7 +2199,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.8';
+const VERSION = '4.9';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;

@@ -55,6 +55,16 @@ create table if not exists public.configuracion (
 alter table public.configuracion enable row level security;
 revoke all on public.configuracion from anon, authenticated;
 
+-- ===== «Escribiendo…» (dura unos segundos; una fila por móvil) =====
+create table if not exists public.presencia (
+  sala  text not null,
+  disp  text not null,
+  hasta timestamptz not null,
+  primary key (sala, disp)
+);
+alter table public.presencia enable row level security;
+revoke all on public.presencia from anon, authenticated;
+
 -- El servicio de avisos (Edge Function) usa el rol interno service_role
 grant select, insert, update, delete on public.suscripciones to service_role;
 grant select, insert, update, delete on public.configuracion to service_role;
@@ -174,6 +184,24 @@ language sql security definer set search_path = public as $$
   delete from suscripciones where endpoint = p_endpoint;
 $$;
 
+-- Avisar de que se está escribiendo (p_activo = false: ha dejado de escribir)
+create or replace function public.escribir(p_sala text, p_disp text, p_activo boolean default true)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if length(p_sala) <> 64 or length(p_disp) > 64 then raise exception 'petición no válida'; end if;
+  insert into presencia (sala, disp, hasta)
+  values (p_sala, p_disp, case when p_activo then now() + interval '6 seconds' else now() end)
+  on conflict (sala, disp) do update set hasta = excluded.hasta;
+end $$;
+
+-- ¿Está escribiendo alguien que no sea este móvil?
+create or replace function public.escribiendo(p_sala text, p_disp text)
+returns boolean
+language sql security definer set search_path = public as $$
+  select exists (select 1 from presencia where sala = p_sala and disp <> p_disp and hasta > now());
+$$;
+
 -- ===== Permisos =====
 do $$
 declare f text;
@@ -181,7 +209,8 @@ begin
   foreach f in array array[
     'leer(text, bigint)', 'enviar(text, text, integer)', 'subir(text, text, integer)',
     'bajar(text, bigint)', 'editar(text, bigint, text)', 'borrar(text, bigint, bigint)',
-    'vaciar(text)', 'suscribir(text, text, text, text, text)', 'desuscribir(text)'
+    'vaciar(text)', 'suscribir(text, text, text, text, text)', 'desuscribir(text)',
+    'escribir(text, text, boolean)', 'escribiendo(text, text)'
   ] loop
     execute format('revoke execute on function public.%s from public', f);
     execute format('grant execute on function public.%s to anon', f);
