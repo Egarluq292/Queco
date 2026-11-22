@@ -1224,15 +1224,20 @@ async function leer() {
 }
 
 /* Globito de mensajes nuevos cuando estás leyendo más arriba */
-function mostrarNuevos() {
+/* Botón «bajar al final»: sale al leer más arriba, con el número de mensajes nuevos si los hay */
+const distanciaAlFinal = () => { const l = $('#lista'); return l.scrollHeight - l.scrollTop - l.clientHeight; };
+function pintarBotonBajar() {
+  const lejos = distanciaAlFinal() > 300;
+  $('#nuevos').classList.toggle('oculto', !lejos && !nuevosSinVer);
   $('#nuevosNum').textContent = nuevosSinVer > 99 ? '99+' : nuevosSinVer;
-  $('#nuevos').classList.remove('oculto');
+  $('#nuevosNum').classList.toggle('oculto', !nuevosSinVer);
 }
-function ocultarNuevos() { nuevosSinVer = 0; $('#nuevos').classList.add('oculto'); }
-$('#nuevos').onclick = () => { const l = $('#lista'); l.scrollTo({ top: l.scrollHeight, behavior: 'smooth' }); ocultarNuevos(); };
+function mostrarNuevos() { pintarBotonBajar(); }
+function ocultarNuevos() { nuevosSinVer = 0; pintarBotonBajar(); }
+$('#nuevos').onclick = () => { const l = $('#lista'); l.scrollTo({ top: l.scrollHeight, behavior: 'smooth' }); nuevosSinVer = 0; $('#nuevosNum').classList.add('oculto'); };
 $('#lista').addEventListener('scroll', () => {
-  const l = $('#lista');
-  if (l.scrollHeight - l.scrollTop - l.clientHeight < 80) { if (nuevosSinVer) ocultarNuevos(); informarVisto(); }
+  if (distanciaAlFinal() < 80) { nuevosSinVer = 0; informarVisto(); }
+  pintarBotonBajar();
 }, { passive: true });
 
 /* «Escribiendo…»: el móvil de tu colega avisa; solo el administrador lo ve */
@@ -2397,7 +2402,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.1';
+const VERSION = '5.2';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
