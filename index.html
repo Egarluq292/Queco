@@ -236,6 +236,20 @@
   .gifCelda img, .galCelda img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
   .gifNota { text-align: center; font-size: 13px; color: var(--suave); min-height: 1em; }
   .gifMarca { text-align: center; font-size: 11px; color: var(--suave); letter-spacing: .04em; }
+  /* Emojis: grandes si van solos (1–3, como Telegram) y algo mayores dentro del texto */
+  .emo { font-size: 1.2em; line-height: 1; vertical-align: -.08em; }
+  .msj.gran .texto { line-height: 1.12; letter-spacing: .02em; }
+  .msj.gran1 .texto { font-size: 3.4em; }
+  .msj.gran2 .texto { font-size: 2.7em; }
+  .msj.gran3 .texto { font-size: 2.2em; }
+  .msj.gran .texto .emo { font-size: 1em; vertical-align: 0; }
+  .msj.sinBurbuja, .msj.mio.sinBurbuja { background: transparent; border-color: transparent; padding: 2px 2px 0; color: var(--texto); }
+  .msj.sinBurbuja.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); padding: 6px 8px 4px; }
+  .msj.sinBurbuja .hora {
+    display: table; margin-left: auto; margin-top: 0; padding: 1px 7px; border-radius: 99px; opacity: 1;
+    background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--suave); border: 1px solid var(--borde);
+  }
+  .msj.sinBurbuja .hora .check.visto { color: #2f8fd8; }
   .msj.eliminado { background: rgba(196, 72, 56, .14); border-color: rgba(196, 72, 56, .45); }
   .msj.eliminado .hora { color: var(--error); opacity: 1; }
   .msj.fallido { opacity: 1; outline: 2px solid var(--error); }
@@ -928,6 +942,36 @@ function formatear(t, prof = 0) {
   frag.append(t.slice(i));
   return frag;
 }
+const RE_EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+const segGrafemas = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('es', { granularity: 'grapheme' }) : null;
+const grafemas = t => segGrafemas ? [...segGrafemas.segment(t)].map(x => x.segment) : [...t];
+/* Devuelve 1, 2 o 3 si el texto son solo emojis (sin contar espacios); 0 en cualquier otro caso */
+function soloEmojis(t) {
+  const s = (t || '').replace(/\s+/g, '');
+  if (!s || s.length > 60) return 0;
+  const g = grafemas(s);
+  return g.length <= 3 && g.every(x => RE_EMOJI.test(x)) ? g.length : 0;
+}
+/* Envuelve cada emoji del texto en <span class="emo"> (salvo dentro de código) */
+function realzarEmojis(raiz) {
+  const w = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+  const nodos = [];
+  while (w.nextNode()) nodos.push(w.currentNode);
+  for (const n of nodos) {
+    if (!RE_EMOJI.test(n.data) || n.parentElement?.closest('code')) continue;
+    const frag = document.createDocumentFragment();
+    let txt = '';
+    for (const g of grafemas(n.data)) {
+      if (RE_EMOJI.test(g)) {
+        if (txt) { frag.append(txt); txt = ''; }
+        const e = document.createElement('span'); e.className = 'emo'; e.textContent = g; frag.append(e);
+      } else txt += g;
+    }
+    if (txt) frag.append(txt);
+    n.replaceWith(frag);
+  }
+  return raiz;
+}
 const sinMarcas = t => t.replace(/```|[*_~`]/g, '');
 function previa(m) {
   if (m.k === 'foto') return '📷 ' + (m.t ? sinMarcas(m.t).slice(0, 120) : 'Foto');
@@ -960,7 +1004,7 @@ function crearElemento(id, m) {
     if (m.w && m.h) { img.width = m.w; img.height = m.h; }
     cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; else img.alt = 'Foto no disponible'; });
     b.append(img);
-    if (m.t) { const pie = document.createElement('div'); pie.className = 'pie'; pie.append(formatear(m.t)); b.append(pie); }
+    if (m.t) { const pie = document.createElement('div'); pie.className = 'pie'; pie.append(realzarEmojis(formatear(m.t))); b.append(pie); }
   } else if (m.k === 'audio') {
     const c = document.createElement('div'); c.className = 'cargando'; c.textContent = 'Cargando audio…';
     b.append(c);
@@ -969,7 +1013,14 @@ function crearElemento(id, m) {
       c.replaceWith(crearReproductor(r.url, m.s));
     });
   } else {
-    const t = document.createElement('div'); t.append(formatear(m.t)); b.append(t);
+    const t = document.createElement('div'); t.className = 'texto';
+    const n = soloEmojis(m.t);
+    if (n) {
+      b.classList.add('gran', 'gran' + n);
+      if (!(m.r && m.r.i)) b.classList.add('sinBurbuja');
+      t.textContent = m.t.trim();
+    } else t.append(realzarEmojis(formatear(m.t)));
+    b.append(t);
   }
   const h = document.createElement('div'); h.className = 'hora';
   h.textContent = (m.e ? 'editado · ' : '') + fmtHora(m.ts);
@@ -2409,7 +2460,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.3';
+const VERSION = '5.4';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
