@@ -276,7 +276,7 @@
     font-size: 11.5px; line-height: 20px; text-align: center;
   }
   #formato {
-    position: fixed; z-index: 8; left: 12px; right: 12px; top: calc(8px + env(safe-area-inset-top));
+    position: fixed; z-index: 8; left: 12px; right: 12px; top: calc(var(--vvArriba, 0px) + 8px + env(safe-area-inset-top));
     max-width: 480px; margin: 0 auto; padding: 4px; border-radius: 14px;
     background: var(--panel); border: 1px solid var(--borde); box-shadow: 0 6px 20px rgba(0,0,0,.18);
   }
@@ -370,10 +370,24 @@
   }
 
   /* Editor de fotos */
-  #editorFotos { position: fixed; inset: 0; z-index: 22; background: #000; color: #fff; display: grid; grid-template-rows: auto 1fr auto auto; }
-  .edBarra { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; text-align: center; font-size: 14px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
-  .edZona { position: relative; min-height: 0; }
-  #edLienzo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #editorFotos { position: fixed; inset: 0; z-index: 22; background: #000; color: #fff; display: grid; grid-template-rows: auto 1fr auto; touch-action: none; }
+  .edBarra { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: calc(10px + env(safe-area-inset-top)) 10px 8px; }
+  .edBarra .hueco { flex: 1; text-align: center; font-size: 15px; font-weight: 600; }
+  .edHerr { width: 42px; height: 42px; flex: none; border-radius: 50%; border: 0; background: rgba(255,255,255,.1); display: grid; place-items: center; cursor: pointer; color: #fff; }
+  .edHerr svg { width: 22px; height: 22px; fill: #fff; }
+  .edHerr:disabled { opacity: .3; }
+  .edTextoBtn { border: 0; background: none; color: #fff; font-size: 16px; padding: 10px 12px; cursor: pointer; }
+  .edTextoBtn.fuerte { font-weight: 700; color: #000; background: #fff; border-radius: 99px; padding: 8px 18px; }
+  .edZona { position: relative; min-height: 0; display: grid; place-items: center; overflow: hidden; touch-action: none; }
+  #edLienzo { display: block; touch-action: none; }
+  #edContador { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); padding: 3px 12px; border-radius: 99px; background: rgba(0,0,0,.55); font-size: 13px; pointer-events: none; }
+  #edContador:empty { display: none; }
+  #edPapelera {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 56px; height: 56px; border-radius: 50%;
+    display: grid; place-items: center; background: rgba(0,0,0,.6); border: 2px solid rgba(255,255,255,.6); transition: transform .12s, background .12s; pointer-events: none;
+  }
+  #edPapelera svg { width: 26px; height: 26px; fill: #fff; }
+  #edPapelera.encima { background: #e53935; border-color: #e53935; transform: translateX(-50%) scale(1.2); }
   .edMiniaturas { display: flex; gap: 8px; padding: 10px 14px 0; overflow-x: auto; justify-content: center; }
   .miniFoto { position: relative; width: 56px; height: 56px; flex: none; padding: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: #222; cursor: pointer; }
   .miniFoto.activa { border-color: #fff; }
@@ -382,13 +396,33 @@
   .miniFoto.mas { display: grid; place-items: center; font-size: 28px; color: #fff; background: none; border: 2px dashed rgba(255,255,255,.5); }
   .edPie { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); }
   #edTexto { background: #1c1c1c; color: #fff; border-color: #333; }
+  .edPanel { display: grid; gap: 12px; padding: 12px 12px calc(14px + env(safe-area-inset-bottom)); }
+  .edFila { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+  .edChip { flex: none; border: 1px solid rgba(255,255,255,.3); background: none; color: #fff; border-radius: 99px; padding: 7px 13px; font-size: 14px; cursor: pointer; }
+  .edChip.activo { background: #fff; color: #000; border-color: #fff; font-weight: 600; }
+  .edColor { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.5); cursor: pointer; padding: 0; }
+  .edColor.activo { border-color: #fff; box-shadow: 0 0 0 2px #000, 0 0 0 4px #fff; }
+  .edGrosor { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: none; display: grid; place-items: center; cursor: pointer; }
+  .edGrosor i { display: block; border-radius: 50%; background: #fff; }
+  .edGrosor.activo { background: rgba(255,255,255,.22); border-color: #fff; }
+  #edCapaTexto { position: fixed; inset: 0; z-index: 24; background: rgba(0,0,0,.6); display: grid; grid-template-rows: auto auto 1fr; }
+  #edCapaTexto .edFila { padding: 4px 12px; }
+  #edCapaTexto .edBarra { background: #000; }
+  #edTxtEntrada {
+    align-self: center; justify-self: center; width: min(92%, 520px); min-height: 60px; max-height: 50vh; resize: none; outline: none;
+    border: 0; border-radius: 12px; padding: 10px 14px; text-align: center; font: 700 30px -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: transparent; field-sizing: content; text-shadow: 0 1px 4px rgba(0,0,0,.45);
+  }
+  #edTxtEntrada.conFondo { text-shadow: none; }
+  #edTxtFondo { font: 700 17px -apple-system, system-ui, sans-serif; }
+  #edTxtFondo.activo { background: #fff; color: #000; }
   .msj .pie { padding: 4px 8px 0; }
 
   /* Visor de fotos */
   #visor { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.94); display: grid; grid-template-rows: 1fr auto; }
   #visor .zona { display: grid; place-items: center; padding: 16px; min-height: 0; overflow: hidden; touch-action: none; position: relative; }
   #visor img { max-width: 100%; max-height: 100%; border-radius: 8px; transform-origin: 0 0; will-change: transform; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  #visor .camBarra { grid-template-columns: 1fr 1fr; }
+  #visor .camBarra { grid-template-columns: 1fr 1fr 1fr; }
   #visorCuenta {
     position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     padding: 3px 12px; border-radius: 99px; background: rgba(0,0,0,.5); color: #fff; font-size: 13px; pointer-events: none;
@@ -694,19 +728,68 @@
   </div>
 </div>
 
-<!-- Editor de fotos: varias fotos, girar y comentario antes de enviar -->
+<!-- Editor de fotos: varias fotos, recortar, girar, dibujar, texto, emojis y pixelar antes de enviar -->
 <div id="editorFotos" class="oculto">
-  <div class="edBarra">
-    <button type="button" class="redondo claro" id="edCerrar" aria-label="Descartar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+  <div class="edBarra" id="edBarraNormal">
+    <button type="button" class="edHerr" id="edCerrar" aria-label="Descartar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <span class="hueco"></span>
+    <button type="button" class="edHerr" id="edDeshacer" aria-label="Deshacer"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.9 7.9 0 0 1 20.1 13l2.37-.78A10.5 10.5 0 0 0 12.5 8z"/></svg></button>
+    <button type="button" class="edHerr" id="edRecortar" aria-label="Recortar"><svg viewBox="0 0 24 24"><path d="M17 15h2V7a2 2 0 0 0-2-2H9v2h8v8ZM7 17V1H5v4H1v2h4v10a2 2 0 0 0 2 2h10v4h2v-4h4v-2H7Z"/></svg></button>
+    <button type="button" class="edHerr" id="edGirar" aria-label="Girar foto"><svg viewBox="0 0 24 24"><path d="M12 4V1l4 4-4 4V6a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8Z"/></svg></button>
+    <button type="button" class="edHerr" id="edEmoji" aria-label="Añadir emoji"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM12 17.5a5.5 5.5 0 0 0 5.1-3.5H6.9a5.5 5.5 0 0 0 5.1 3.5Z"/></svg></button>
+    <button type="button" class="edHerr" id="edTextoHerr" aria-label="Añadir texto"><svg viewBox="0 0 24 24"><path d="M5 4v3h5.5v12h3V7H19V4z"/></svg></button>
+    <button type="button" class="edHerr" id="edDibujar" aria-label="Dibujar"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+  </div>
+  <div class="edBarra oculto" id="edBarraModo">
+    <button type="button" class="edTextoBtn" id="edModoCancelar">Cancelar</button>
+    <button type="button" class="edHerr" id="edModoDeshacer" aria-label="Deshacer"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.62-3.62A7.9 7.9 0 0 1 20.1 13l2.37-.78A10.5 10.5 0 0 0 12.5 8z"/></svg></button>
+    <span class="hueco" id="edModoTitulo"></span>
+    <button type="button" class="edTextoBtn fuerte" id="edModoListo">Listo</button>
+  </div>
+  <div class="edZona" id="edZona">
+    <canvas id="edLienzo"></canvas>
     <span id="edContador"></span>
-    <button type="button" class="redondo claro" id="edGirar" aria-label="Girar foto"><svg viewBox="0 0 24 24"><path d="M12 4V1l4 4-4 4V6a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8Z"/></svg></button>
+    <div id="edPapelera" class="oculto"><svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z"/></svg></div>
   </div>
-  <div class="edZona"><canvas id="edLienzo"></canvas></div>
-  <div class="edMiniaturas" id="edMiniaturas"></div>
-  <div class="edPie">
-    <textarea id="edTexto" rows="1" maxlength="1000" placeholder="Añade un comentario…"></textarea>
-    <button type="button" class="redondo" id="edEnviar" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+  <div id="edAbajo">
+    <div id="edNormal">
+      <div class="edMiniaturas" id="edMiniaturas"></div>
+      <div class="edPie">
+        <textarea id="edTexto" rows="1" maxlength="1000" placeholder="Añade un comentario…"></textarea>
+        <button type="button" class="redondo" id="edEnviar" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+      </div>
+    </div>
+    <div id="edPanelDibujo" class="edPanel oculto">
+      <div class="edFila" id="edPinceles">
+        <button type="button" class="edChip" data-p="rotulador">Rotulador</button>
+        <button type="button" class="edChip" data-p="fluor">Fluorescente</button>
+        <button type="button" class="edChip" data-p="pixel">Pixelar</button>
+      </div>
+      <div class="edFila" id="edGrosores"></div>
+      <div class="edFila" id="edColoresDibujo"></div>
+    </div>
+    <div id="edPanelRecorte" class="edPanel oculto">
+      <div class="edFila" id="edProporciones">
+        <button type="button" class="edChip" data-r="0">Libre</button>
+        <button type="button" class="edChip" data-r="1">Cuadrado</button>
+        <button type="button" class="edChip" data-r="0.75">3:4</button>
+        <button type="button" class="edChip" data-r="1.3333">4:3</button>
+        <button type="button" class="edChip" data-r="0.5625">9:16</button>
+        <button type="button" class="edChip" data-r="1.7778">16:9</button>
+      </div>
+      <div class="edFila"><button type="button" class="edChip" id="edRestablecer">Restablecer</button></div>
+    </div>
   </div>
+</div>
+<div id="edCapaTexto" class="oculto">
+  <div class="edBarra">
+    <button type="button" class="edTextoBtn" id="edTxtCancelar">Cancelar</button>
+    <button type="button" class="edHerr" id="edTxtFondo" aria-label="Texto con fondo">A</button>
+    <span class="hueco"></span>
+    <button type="button" class="edTextoBtn fuerte" id="edTxtListo">Listo</button>
+  </div>
+  <div class="edFila" id="edColoresTexto"></div>
+  <textarea id="edTxtEntrada" rows="1" maxlength="300" placeholder="Escribe…" autocapitalize="sentences"></textarea>
 </div>
 
 <!-- Visor de fotos -->
@@ -714,6 +797,7 @@
   <div class="zona"><img alt=""><span id="visorCuenta"></span></div>
   <div class="camBarra">
     <button type="button" class="redondo claro" id="visorCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button>
+    <button type="button" class="redondo claro" id="visorEditar" aria-label="Editar y reenviar"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
     <button type="button" class="redondo claro" id="visorGuardar" aria-label="Guardar en el móvil"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM4 19h16v2H4z"/></svg></button>
   </div>
 </div>
@@ -1568,38 +1652,223 @@ $('#camDisparar').onclick = () => {
 };
 $('#camCerrar').onclick = () => { cerrarCamara(); if (fotosEd.length) mostrarEditor(); };
 
-/* ---------- Editor de fotos ---------- */
+/* ---------- Editor de fotos ----------
+   Todo se guarda en coordenadas de la foto ya girada y sin recortar; el recorte solo decide qué parte se ve
+   y se envía. Así se puede deshacer, volver a recortar o girar sin perder nada. */
+const COLORES_ED = ['#ffffff', '#000000', '#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#8e24aa', '#ec407a'];
+const GROSORES_ED = { rotulador: [4, 9, 18], fluor: [16, 28, 44], pixel: [24, 44, 72] }; // en píxeles de pantalla
+const TITULOS_ED = { dibujo: 'Dibujar', recorte: 'Recortar' };
 let fotosEd = [], actualEd = 0;
+let modoEd = null;                 // null | 'dibujo' | 'recorte'
+const pincelEd = { tipo: 'rotulador', color: '#e53935', grosor: 1 };
+let recorteEd = null, propEd = 0;  // marco provisional mientras se recorta y proporción elegida (0 = libre)
+let gestoEd = null, dibujoPendiente = false;
+const punterosEd = new Map();
+
+function nuevaFoto(lienzo, giro = 0) {
+  return { lienzo, giro, texto: '', trazos: [], objetos: [], recorte: null, historia: [], _base: null, _baseGiro: null, _pix: null, _fondo: null };
+}
 function agregarFoto(lienzo, giro = 0) {
-  fotosEd.push({ lienzo, giro, texto: '' });
+  fotosEd.push(nuevaFoto(lienzo, giro));
   actualEd = fotosEd.length - 1;
   mostrarEditor();
 }
+const fotoEd = () => fotosEd[actualEd];
+function baseEd(f) {
+  if (f._baseGiro !== f.giro) {
+    f._base = girarLienzo(f.lienzo, f.lienzo.width, f.lienzo.height, f.giro);
+    f._baseGiro = f.giro; f._pix = null; f._fondo = null;
+  }
+  return f._base;
+}
+function pixeladoEd(f) {
+  if (!f._pix) {
+    const b = baseEd(f);
+    const bloque = Math.max(8, Math.round(Math.max(b.width, b.height) / 45));
+    const p = document.createElement('canvas');
+    p.width = Math.max(1, Math.round(b.width / bloque)); p.height = Math.max(1, Math.round(b.height / bloque));
+    p.getContext('2d').drawImage(b, 0, 0, p.width, p.height);
+    const g = document.createElement('canvas'); g.width = b.width; g.height = b.height;
+    const x = g.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(p, 0, 0, g.width, g.height);
+    f._pix = g;
+  }
+  return f._pix;
+}
+function trazarEd(ctx, f, t) {
+  const p = t.puntos; if (p.length < 2) return;
+  ctx.save();
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.lineWidth = t.ancho;
+  if (t.tipo === 'pixel') ctx.strokeStyle = ctx.createPattern(pixeladoEd(f), 'no-repeat');
+  else { ctx.strokeStyle = t.color; if (t.tipo === 'fluor') ctx.globalAlpha = .4; }
+  ctx.beginPath();
+  ctx.moveTo(p[0], p[1]);
+  if (p.length === 2) ctx.lineTo(p[0] + .01, p[1]);
+  for (let i = 2; i < p.length - 2; i += 2) ctx.quadraticCurveTo(p[i], p[i + 1], (p[i] + p[i + 2]) / 2, (p[i + 1] + p[i + 3]) / 2);
+  if (p.length > 2) ctx.lineTo(p[p.length - 2], p[p.length - 1]);
+  ctx.stroke();
+  ctx.restore();
+}
+/* Foto girada con todos los trazos: se rehace solo cuando cambian */
+function fondoEd(f) {
+  if (!f._fondo) {
+    const b = baseEd(f);
+    const c = document.createElement('canvas'); c.width = b.width; c.height = b.height;
+    const x = c.getContext('2d'); x.drawImage(b, 0, 0);
+    for (const t of f.trazos) trazarEd(x, f, t);
+    f._fondo = c;
+  }
+  return f._fondo;
+}
+const ladoCortoEd = f => { const b = baseEd(f); return Math.min(b.width, b.height); };
+function contrasteEd(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > .62 ? '#000000' : '#ffffff';
+}
+function rectRedondeado(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function dibujarObjetoEd(ctx, f, o) {
+  const m = ladoCortoEd(f);
+  ctx.save();
+  ctx.translate(o.x, o.y); ctx.rotate(o.ang); ctx.scale(o.esc, o.esc);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (o.tipo === 'emoji') {
+    const t = m * .16;
+    ctx.font = `${t}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    o._w = ctx.measureText(o.txt).width; o._h = t * 1.1;
+    ctx.fillText(o.txt, 0, t * .04);
+  } else {
+    const t = m * .07, alto = t * 1.25, pad = t * .4;
+    ctx.font = `700 ${t}px -apple-system, system-ui, "Segoe UI", Roboto, sans-serif`;
+    const lineas = o.txt.split('\n');
+    const ancho = Math.max(...lineas.map(l => ctx.measureText(l).width));
+    o._w = ancho + pad * 2; o._h = alto * lineas.length + pad;
+    const y0 = -(alto * (lineas.length - 1)) / 2;
+    if (o.fondo) {
+      ctx.fillStyle = o.color; rectRedondeado(ctx, -o._w / 2, -o._h / 2, o._w, o._h, t * .3); ctx.fill();
+      ctx.fillStyle = contrasteEd(o.color);
+    } else {
+      ctx.fillStyle = o.color;
+      ctx.shadowColor = contrasteEd(o.color) === '#000000' ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.55)';
+      ctx.shadowBlur = t * .15;
+    }
+    lineas.forEach((l, i) => ctx.fillText(l, 0, y0 + i * alto));
+  }
+  ctx.restore();
+}
+function regionEd(f) {
+  const b = baseEd(f);
+  if (modoEd === 'recorte' || !f.recorte) return { x: 0, y: 0, w: b.width, h: b.height };
+  return f.recorte;
+}
+function componerEd(f) {
+  const b = baseEd(f), r = f.recorte || { x: 0, y: 0, w: b.width, h: b.height };
+  const c = document.createElement('canvas'); c.width = Math.round(r.w); c.height = Math.round(r.h);
+  const x = c.getContext('2d'); x.translate(-r.x, -r.y);
+  x.drawImage(fondoEd(f), 0, 0);
+  for (const o of f.objetos) dibujarObjetoEd(x, f, o);
+  return c;
+}
+function ajustarVistaEd() {
+  const l = $('#edLienzo'), z = $('#edZona');
+  if (!l.width || !z.clientWidth) return;
+  const margen = modoEd === 'recorte' ? 24 : 0;
+  const s = Math.min((z.clientWidth - margen * 2) / l.width, (z.clientHeight - margen * 2) / l.height);
+  l.style.width = Math.round(l.width * s) + 'px'; l.style.height = Math.round(l.height * s) + 'px';
+}
+window.addEventListener('resize', () => { if (fotosEd.length) ajustarVistaEd(); });
+function pintarLienzoEd(trazoActual = null) {
+  const f = fotoEd(); if (!f) return;
+  const l = $('#edLienzo'), r = regionEd(f);
+  const w = Math.max(1, Math.round(r.w)), h = Math.max(1, Math.round(r.h));
+  if (l.width !== w || l.height !== h) { l.width = w; l.height = h; ajustarVistaEd(); }
+  const x = l.getContext('2d');
+  x.setTransform(1, 0, 0, 1, -r.x, -r.y);
+  x.drawImage(fondoEd(f), 0, 0);
+  if (trazoActual) trazarEd(x, f, trazoActual);
+  for (const o of f.objetos) dibujarObjetoEd(x, f, o);
+  if (modoEd === 'recorte' && recorteEd) pintarMarcoEd(x, f);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+}
+function repintarEd(trazo = null) {
+  if (dibujoPendiente) return;
+  dibujoPendiente = true;
+  requestAnimationFrame(() => { dibujoPendiente = false; pintarLienzoEd(trazo || (gestoEd && gestoEd.trazo) || null); });
+}
+function pintarMarcoEd(x, f) {
+  const b = baseEd(f), r = recorteEd, k = $('#edLienzo').width / ($('#edLienzo').getBoundingClientRect().width || 1);
+  x.save();
+  x.fillStyle = 'rgba(0,0,0,.55)';
+  x.beginPath(); x.rect(0, 0, b.width, b.height); x.rect(r.x, r.y, r.w, r.h); x.fill('evenodd');
+  x.strokeStyle = 'rgba(255,255,255,.45)'; x.lineWidth = k;
+  x.beginPath();
+  for (const t of [1 / 3, 2 / 3]) { x.moveTo(r.x + r.w * t, r.y); x.lineTo(r.x + r.w * t, r.y + r.h); x.moveTo(r.x, r.y + r.h * t); x.lineTo(r.x + r.w, r.y + r.h * t); }
+  x.stroke();
+  x.strokeStyle = '#fff'; x.lineWidth = 1.5 * k; x.strokeRect(r.x, r.y, r.w, r.h);
+  const e = 22 * k, g = 4 * k;
+  x.lineWidth = g; x.beginPath();
+  for (const [cx, cy, sx, sy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
+    x.moveTo(cx + sx * e, cy + sy * g / 2 * -0 + sy * 0); x.lineTo(cx, cy); x.lineTo(cx, cy + sy * e);
+  }
+  x.stroke();
+  x.restore();
+}
+
+/* Historial para deshacer: una copia del estado antes de cada cambio */
+function estadoEd(f) {
+  return JSON.stringify({ giro: f.giro, trazos: f.trazos, objetos: f.objetos.map(({ _w, _h, ...o }) => o), recorte: f.recorte });
+}
+function apuntarEd(f, antes) {
+  f.historia.push(antes);
+  if (f.historia.length > 60) f.historia.shift();
+  actualizarBarrasEd();
+}
+function deshacerEd() {
+  const f = fotoEd(); if (!f || !f.historia.length) return;
+  const s = JSON.parse(f.historia.pop());
+  const trazosCambian = JSON.stringify(s.trazos) !== JSON.stringify(f.trazos);
+  Object.assign(f, s);
+  if (trazosCambian) f._fondo = null;
+  if (modoEd === 'recorte') recorteEd = f.recorte ? { ...f.recorte } : marcoCompletoEd(f);
+  pintarLienzoEd(); actualizarBarrasEd();
+}
+function actualizarBarrasEd() {
+  const f = fotoEd(), hay = !!(f && f.historia.length);
+  $('#edDeshacer').disabled = !hay;
+  $('#edModoDeshacer').disabled = !hay;
+  $('#edModoDeshacer').classList.toggle('oculto', modoEd !== 'dibujo');
+}
+const editadaEd = f => f.trazos.length || f.objetos.length || f.recorte;
+
 function mostrarEditor() {
   if (!fotosEd.length) { cerrarEditor(); return; }
   $('#editorFotos').classList.remove('oculto');
   pintarEditor();
 }
 function cerrarEditor() {
-  fotosEd = []; actualEd = 0;
+  if (modoEd) salirModoEd(false);
+  cerrarTextoEd(false);
+  fotosEd = []; actualEd = 0; gestoEd = null; punterosEd.clear();
   $('#edTexto').value = '';
   $('#editorFotos').classList.add('oculto');
 }
 function miniatura(f) {
-  const g = girarLienzo(f.lienzo, f.lienzo.width, f.lienzo.height, f.giro);
+  const g = componerEd(f);
   const c = document.createElement('canvas'); c.width = c.height = 112;
   const s = Math.max(112 / g.width, 112 / g.height);
   c.getContext('2d').drawImage(g, (112 - g.width * s) / 2, (112 - g.height * s) / 2, g.width * s, g.height * s);
   return c;
 }
 function pintarEditor() {
-  const f = fotosEd[actualEd];
-  const g = girarLienzo(f.lienzo, f.lienzo.width, f.lienzo.height, f.giro);
-  const l = $('#edLienzo'); l.width = g.width; l.height = g.height;
-  l.getContext('2d').drawImage(g, 0, 0);
+  const f = fotoEd();
   $('#edTexto').value = f.texto;
   $('#edContador').textContent = fotosEd.length > 1 ? `${actualEd + 1} de ${fotosEd.length}` : '';
+  pintarLienzoEd(); ajustarVistaEd(); actualizarBarrasEd();
   const cont = $('#edMiniaturas'); cont.replaceChildren();
+  if (fotosEd.length === 1 && fotosEd.length < 10) { /* con una sola foto basta el botón «+» */ }
   fotosEd.forEach((foto, i) => {
     const b = document.createElement('button'); b.type = 'button';
     b.className = 'miniFoto' + (i === actualEd ? ' activa' : '');
@@ -1622,10 +1891,306 @@ function pintarEditor() {
     cont.append(mas);
   }
 }
-$('#edTexto').addEventListener('input', () => { if (fotosEd[actualEd]) fotosEd[actualEd].texto = $('#edTexto').value; });
-$('#edGirar').onclick = () => { const f = fotosEd[actualEd]; if (f) { f.giro = (f.giro + 90) % 360; pintarEditor(); } };
+function cambiarFotoEd(paso) {
+  const n = actualEd + paso;
+  if (n < 0 || n >= fotosEd.length) return;
+  actualEd = n; pintarEditor();
+}
+
+/* Girar: la foto y todo lo añadido encima giran juntos 90° a la derecha */
+function girarEd() {
+  const f = fotoEd(); if (!f) return;
+  const antes = estadoEd(f), H = baseEd(f).height;
+  const gira = (x, y) => [H - y, x];
+  for (const t of f.trazos) for (let i = 0; i < t.puntos.length; i += 2) [t.puntos[i], t.puntos[i + 1]] = gira(t.puntos[i], t.puntos[i + 1]);
+  for (const o of f.objetos) { [o.x, o.y] = gira(o.x, o.y); o.ang += Math.PI / 2; }
+  if (f.recorte) { const r = f.recorte; f.recorte = { x: H - r.y - r.h, y: r.x, w: r.h, h: r.w }; }
+  f.giro = (f.giro + 90) % 360;
+  apuntarEd(f, antes);
+  pintarEditor();
+}
+
+/* Modos: dibujar y recortar */
+function entrarModoEd(m) {
+  const f = fotoEd(); if (!f) return;
+  modoEd = m;
+  $('#edBarraNormal').classList.add('oculto'); $('#edBarraModo').classList.remove('oculto');
+  $('#edNormal').classList.add('oculto');
+  $('#edPanelDibujo').classList.toggle('oculto', m !== 'dibujo');
+  $('#edPanelRecorte').classList.toggle('oculto', m !== 'recorte');
+  $('#edModoTitulo').textContent = TITULOS_ED[m];
+  $('#edModoCancelar').classList.toggle('oculto', m !== 'recorte');
+  $('#edContador').classList.add('oculto');
+  if (m === 'recorte') {
+    recorteEd = f.recorte ? { ...f.recorte } : marcoCompletoEd(f);
+    propEd = 0; marcarChipsEd('#edProporciones', 'r', '0');
+  } else pintarPanelDibujoEd();
+  actualizarBarrasEd();
+  pintarLienzoEd(); ajustarVistaEd();
+}
+function salirModoEd(aplicar) {
+  const f = fotoEd(), m = modoEd;
+  if (m === 'recorte' && aplicar && f) {
+    const b = baseEd(f), r = recorteEd;
+    const completo = r.x <= .5 && r.y <= .5 && r.w >= b.width - 1 && r.h >= b.height - 1;
+    const nuevo = completo ? null : { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) };
+    if (JSON.stringify(nuevo) !== JSON.stringify(f.recorte)) { const antes = estadoEd(f); f.recorte = nuevo; apuntarEd(f, antes); }
+  }
+  modoEd = null; recorteEd = null; gestoEd = null;
+  $('#edBarraNormal').classList.remove('oculto'); $('#edBarraModo').classList.add('oculto');
+  $('#edNormal').classList.remove('oculto');
+  $('#edPanelDibujo').classList.add('oculto'); $('#edPanelRecorte').classList.add('oculto');
+  $('#edContador').classList.remove('oculto');
+  if (f) pintarEditor();
+}
+const marcoCompletoEd = f => { const b = baseEd(f); return { x: 0, y: 0, w: b.width, h: b.height }; };
+function marcarChipsEd(sel, clave, valor) {
+  for (const b of document.querySelectorAll(sel + ' .edChip')) b.classList.toggle('activo', b.dataset[clave] === valor);
+}
+function pintarPanelDibujoEd() {
+  marcarChipsEd('#edPinceles', 'p', pincelEd.tipo);
+  const gr = $('#edGrosores'); gr.replaceChildren();
+  GROSORES_ED[pincelEd.tipo].forEach((g, i) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'edGrosor' + (i === pincelEd.grosor ? ' activo' : '');
+    b.setAttribute('aria-label', ['Fino', 'Medio', 'Grueso'][i]);
+    const p = document.createElement('i'); const d = [6, 12, 20][i] + 'px'; p.style.width = p.style.height = d;
+    b.append(p);
+    b.onclick = () => { pincelEd.grosor = i; pintarPanelDibujoEd(); };
+    gr.append(b);
+  });
+  const co = $('#edColoresDibujo');
+  co.classList.toggle('oculto', pincelEd.tipo === 'pixel');
+  pintarColoresEd(co, pincelEd.color, c => { pincelEd.color = c; pintarPanelDibujoEd(); });
+}
+function pintarColoresEd(cont, actual, elegir) {
+  cont.replaceChildren();
+  for (const c of COLORES_ED) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'edColor' + (c === actual ? ' activo' : '');
+    b.style.background = c; b.setAttribute('aria-label', 'Color');
+    b.onclick = () => elegir(c);
+    cont.append(b);
+  }
+}
+$('#edPinceles').onclick = e => { const p = e.target.dataset?.p; if (p) { pincelEd.tipo = p; pintarPanelDibujoEd(); } };
+$('#edProporciones').onclick = e => {
+  const v = e.target.dataset?.r; if (v === undefined) return;
+  propEd = Number(v); marcarChipsEd('#edProporciones', 'r', v);
+  if (propEd) {
+    const b = baseEd(fotoEd());
+    let w = b.width, h = w / propEd;
+    if (h > b.height) { h = b.height; w = h * propEd; }
+    recorteEd = { x: (b.width - w) / 2, y: (b.height - h) / 2, w, h };
+  }
+  pintarLienzoEd();
+};
+$('#edRestablecer').onclick = () => { propEd = 0; marcarChipsEd('#edProporciones', 'r', '0'); recorteEd = marcoCompletoEd(fotoEd()); pintarLienzoEd(); };
+$('#edRecortar').onclick = () => entrarModoEd('recorte');
+$('#edDibujar').onclick = () => entrarModoEd('dibujo');
+$('#edModoListo').onclick = () => salirModoEd(true);
+$('#edModoCancelar').onclick = () => salirModoEd(false);
+$('#edDeshacer').onclick = deshacerEd;
+$('#edModoDeshacer').onclick = deshacerEd;
+$('#edGirar').onclick = girarEd;
+
+/* Texto y emojis: se añaden en el centro de lo que se ve; luego se mueven, se pellizcan y se giran */
+function centroVisibleEd(f) { const r = regionEd(f); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+function anadirObjetoEd(o) {
+  const f = fotoEd(); if (!f) return;
+  const antes = estadoEd(f), c = centroVisibleEd(f);
+  const r = regionEd(f);
+  f.objetos.push({ x: c.x, y: c.y, esc: Math.min(r.w, r.h) / ladoCortoEd(f), ang: 0, ...o });
+  apuntarEd(f, antes);
+  pintarLienzoEd();
+}
+$('#edEmoji').onclick = () => abrirPanelEmoji(e => anadirObjetoEd({ tipo: 'emoji', txt: e }));
+let textoEd = null; // { obj, color, fondo }
+function abrirTextoEd(obj = null) {
+  textoEd = { obj, color: obj ? obj.color : '#ffffff', fondo: obj ? obj.fondo : false };
+  const t = $('#edTxtEntrada'); t.value = obj ? obj.txt : '';
+  pintarTextoEd();
+  $('#edCapaTexto').classList.remove('oculto');
+  t.focus();
+}
+function pintarTextoEd() {
+  const t = $('#edTxtEntrada'), s = textoEd;
+  t.classList.toggle('conFondo', s.fondo);
+  t.style.background = s.fondo ? s.color : 'transparent';
+  t.style.color = s.fondo ? contrasteEd(s.color) : s.color;
+  $('#edTxtFondo').classList.toggle('activo', s.fondo);
+  pintarColoresEd($('#edColoresTexto'), s.color, c => { s.color = c; pintarTextoEd(); });
+}
+function cerrarTextoEd(aplicar) {
+  if (!textoEd) return;
+  const s = textoEd; textoEd = null;
+  const t = $('#edTxtEntrada'); t.blur();
+  $('#edCapaTexto').classList.add('oculto');
+  if (!aplicar) return;
+  const txt = t.value.replace(/\s+$/g, '').replace(/^\s*\n/g, '');
+  const f = fotoEd(); if (!f) return;
+  if (s.obj) {
+    const antes = estadoEd(f);
+    if (!txt.trim()) f.objetos.splice(f.objetos.indexOf(s.obj), 1);
+    else Object.assign(s.obj, { txt, color: s.color, fondo: s.fondo });
+    if (estadoEd(f) !== antes) apuntarEd(f, antes);
+    pintarLienzoEd();
+  } else if (txt.trim()) anadirObjetoEd({ tipo: 'texto', txt, color: s.color, fondo: s.fondo });
+}
+$('#edTextoHerr').onclick = () => abrirTextoEd();
+$('#edTxtListo').onclick = () => cerrarTextoEd(true);
+$('#edTxtCancelar').onclick = () => cerrarTextoEd(false);
+$('#edTxtFondo').onclick = () => { textoEd.fondo = !textoEd.fondo; pintarTextoEd(); $('#edTxtEntrada').focus(); };
+for (const sel of ['#edTxtFondo', '#edColoresTexto']) $(sel).addEventListener('mousedown', e => e.preventDefault());
+
+/* Gestos sobre la foto */
+function aImagenEd(cx, cy) {
+  const l = $('#edLienzo'), rc = l.getBoundingClientRect(), r = regionEd(fotoEd());
+  const k = l.width / (rc.width || 1);
+  return { x: r.x + (cx - rc.left) * k, y: r.y + (cy - rc.top) * k, k };
+}
+function objetoEnEd(f, p) {
+  for (let i = f.objetos.length - 1; i >= 0; i--) {
+    const o = f.objetos[i]; if (!o._w) continue;
+    const dx = p.x - o.x, dy = p.y - o.y, c = Math.cos(-o.ang), s = Math.sin(-o.ang);
+    const lx = (dx * c - dy * s) / o.esc, ly = (dx * s + dy * c) / o.esc;
+    const holgura = 14 * p.k / o.esc;
+    if (Math.abs(lx) <= o._w / 2 + holgura && Math.abs(ly) <= o._h / 2 + holgura) return o;
+  }
+  return null;
+}
+function sobrePapeleraEd(cx, cy) {
+  const r = $('#edPapelera').getBoundingClientRect();
+  return Math.hypot(cx - (r.left + r.width / 2), cy - (r.top + r.height / 2)) < 50;
+}
+function dosDedosEd() {
+  const [a, b] = [...punterosEd.values()];
+  return { d: Math.hypot(b.x - a.x, b.y - a.y) || 1, a: Math.atan2(b.y - a.y, b.x - a.x), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+}
+const zonaEd = $('#edZona');
+zonaEd.addEventListener('pointerdown', e => {
+  const f = fotoEd(); if (!f) return;
+  try { zonaEd.setPointerCapture(e.pointerId); } catch {}
+  punterosEd.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const p = aImagenEd(e.clientX, e.clientY);
+  if (punterosEd.size === 1) {
+    if (modoEd === 'dibujo') {
+      const ancho = GROSORES_ED[pincelEd.tipo][pincelEd.grosor] * p.k;
+      gestoEd = { tipo: 'trazo', trazo: { tipo: pincelEd.tipo, color: pincelEd.color, ancho, puntos: [p.x, p.y] } };
+      repintarEd();
+    } else if (modoEd === 'recorte') {
+      const r = recorteEd, tol = 28 * p.k;
+      const dentroX = p.x > r.x - tol && p.x < r.x + r.w + tol, dentroY = p.y > r.y - tol && p.y < r.y + r.h + tol;
+      const bordes = {
+        l: dentroY && Math.abs(p.x - r.x) < tol, r: dentroY && Math.abs(p.x - r.x - r.w) < tol,
+        t: dentroX && Math.abs(p.y - r.y) < tol, b: dentroX && Math.abs(p.y - r.y - r.h) < tol
+      };
+      if (bordes.l && bordes.r) bordes[p.x < r.x + r.w / 2 ? 'r' : 'l'] = false;
+      if (bordes.t && bordes.b) bordes[p.y < r.y + r.h / 2 ? 'b' : 't'] = false;
+      if (bordes.l || bordes.r || bordes.t || bordes.b) gestoEd = { tipo: 'borde', ...bordes, r0: { ...r }, p0: p };
+      else if (p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h) gestoEd = { tipo: 'marco', r0: { ...r }, p0: p };
+      else gestoEd = null;
+    } else {
+      const o = objetoEnEd(f, p);
+      if (o) {
+        f.objetos.splice(f.objetos.indexOf(o), 1); f.objetos.push(o); // al frente
+        gestoEd = { tipo: 'mover', obj: o, x0: o.x, y0: o.y, p0: p, t0: Date.now(), movido: false, antes: estadoEd(f) };
+      } else gestoEd = { tipo: 'nada', sx: e.clientX, sy: e.clientY };
+    }
+  } else if (punterosEd.size === 2) {
+    if (gestoEd?.tipo === 'trazo') { gestoEd = null; repintarEd(); return; } // dos dedos al dibujar: se anula el trazo
+    if (modoEd) { gestoEd = null; return; }
+    const d = dosDedosEd(), c = aImagenEd(d.cx, d.cy);
+    const o = gestoEd?.obj || objetoEnEd(f, c);
+    if (!o) { gestoEd = null; return; }
+    gestoEd = { tipo: 'pellizco', obj: o, d0: d.d, a0: d.a, c0: c, esc0: o.esc, ang0: o.ang, x0: o.x, y0: o.y, antes: gestoEd?.antes || estadoEd(f) };
+  }
+});
+zonaEd.addEventListener('pointermove', e => {
+  if (!punterosEd.has(e.pointerId)) return;
+  punterosEd.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const g = gestoEd; if (!g) return;
+  const f = fotoEd(), p = aImagenEd(e.clientX, e.clientY);
+  if (g.tipo === 'trazo') {
+    const q = g.trazo.puntos, lx = q[q.length - 2], ly = q[q.length - 1];
+    if (Math.hypot(p.x - lx, p.y - ly) > 1.5 * p.k) { q.push(p.x, p.y); repintarEd(); }
+  } else if (g.tipo === 'mover') {
+    if (!g.movido && Math.hypot(p.x - g.p0.x, p.y - g.p0.y) < 6 * p.k) return;
+    g.movido = true;
+    g.obj.x = g.x0 + p.x - g.p0.x; g.obj.y = g.y0 + p.y - g.p0.y;
+    const pap = $('#edPapelera'); pap.classList.remove('oculto');
+    pap.classList.toggle('encima', sobrePapeleraEd(e.clientX, e.clientY));
+    repintarEd();
+  } else if (g.tipo === 'pellizco' && punterosEd.size >= 2) {
+    const d = dosDedosEd(), c = aImagenEd(d.cx, d.cy);
+    g.obj.esc = Math.min(12, Math.max(.15, g.esc0 * d.d / g.d0));
+    g.obj.ang = g.ang0 + d.a - g.a0;
+    g.obj.x = g.x0 + c.x - g.c0.x; g.obj.y = g.y0 + c.y - g.c0.y;
+    repintarEd();
+  } else if (g.tipo === 'marco' || g.tipo === 'borde') {
+    moverMarcoEd(g, p.x - g.p0.x, p.y - g.p0.y);
+    repintarEd();
+  }
+});
+function moverMarcoEd(g, dx, dy) {
+  const b = baseEd(fotoEd()), r0 = g.r0, minimo = Math.min(b.width, b.height) * .08;
+  if (g.tipo === 'marco') {
+    recorteEd = { ...r0, x: Math.min(Math.max(0, r0.x + dx), b.width - r0.w), y: Math.min(Math.max(0, r0.y + dy), b.height - r0.h) };
+    return;
+  }
+  let x1 = r0.x, y1 = r0.y, x2 = r0.x + r0.w, y2 = r0.y + r0.h;
+  if (g.l) x1 = Math.min(Math.max(0, x1 + dx), x2 - minimo);
+  if (g.r) x2 = Math.max(Math.min(b.width, x2 + dx), x1 + minimo);
+  if (g.t) y1 = Math.min(Math.max(0, y1 + dy), y2 - minimo);
+  if (g.b) y2 = Math.max(Math.min(b.height, y2 + dy), y1 + minimo);
+  if (propEd) {
+    let w = x2 - x1, h = y2 - y1;
+    if (g.l || g.r) h = w / propEd; else w = h * propEd;
+    if (g.t) y1 = y2 - h; else y2 = y1 + h;
+    if (g.l) x1 = x2 - w; else x2 = x1 + w;
+    if (x1 < -.5 || y1 < -.5 || x2 > b.width + .5 || y2 > b.height + .5 || w < minimo || h < minimo) return;
+  }
+  recorteEd = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+function finGestoEd(e) {
+  if (!punterosEd.has(e.pointerId)) return;
+  punterosEd.delete(e.pointerId);
+  const g = gestoEd, f = fotoEd();
+  if (!g || !f) { if (!punterosEd.size) gestoEd = null; return; }
+  if (g.tipo === 'pellizco') {
+    if (punterosEd.size === 0) { if (estadoEd(f) !== g.antes) apuntarEd(f, g.antes); gestoEd = null; }
+    return; // con un dedo aún puesto no se hace nada más hasta soltarlo
+  }
+  if (punterosEd.size) return;
+  gestoEd = null;
+  if (g.tipo === 'trazo') {
+    const antes = estadoEd(f);
+    f.trazos.push(g.trazo);
+    trazarEd(fondoEd(f).getContext('2d'), f, g.trazo);
+    apuntarEd(f, antes);
+    pintarLienzoEd();
+  } else if (g.tipo === 'mover') {
+    const pap = $('#edPapelera'); pap.classList.add('oculto');
+    if (g.movido && e.type === 'pointerup' && sobrePapeleraEd(e.clientX, e.clientY)) {
+      f.objetos.splice(f.objetos.indexOf(g.obj), 1);
+      navigator.vibrate?.(20);
+    }
+    pap.classList.remove('encima');
+    if (estadoEd(f) !== g.antes) apuntarEd(f, g.antes);
+    else if (!g.movido && g.obj.tipo === 'texto' && Date.now() - g.t0 < 400) abrirTextoEd(g.obj);
+    pintarLienzoEd();
+  } else if (g.tipo === 'nada' && e.type === 'pointerup') {
+    const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) cambiarFotoEd(dx < 0 ? 1 : -1);
+  }
+}
+zonaEd.addEventListener('pointerup', finGestoEd);
+zonaEd.addEventListener('pointercancel', finGestoEd);
+
+$('#edTexto').addEventListener('input', () => { if (fotoEd()) fotoEd().texto = $('#edTexto').value; });
 $('#edCerrar').onclick = async () => {
-  if (fotosEd.length > 1 && !await confirmar('Se descartarán todas las fotos.', 'Descartar fotos')) return;
+  const hayCambios = fotosEd.length > 1 || fotosEd.some(editadaEd);
+  if (hayCambios && !await confirmar(fotosEd.length > 1 ? 'Se descartarán todas las fotos.' : 'Se descartará la foto con los cambios.', fotosEd.length > 1 ? 'Descartar fotos' : 'Descartar foto')) return;
   cerrarEditor();
 };
 $('#edEnviar').onclick = async () => {
@@ -1633,13 +2198,19 @@ $('#edEnviar').onclick = async () => {
   cerrarEditor();
   for (const f of lote) {
     try {
-      const g = girarLienzo(f.lienzo, f.lienzo.width, f.lienzo.height, f.giro);
+      const g = componerEd(f);
       const { blob, w, h } = await aJpeg(g, g.width, g.height);
       const texto = f.texto.trim();
       await enviarAdjunto(blob, 'foto', { w, h, ...(texto ? { t: texto } : {}) });
     } catch { estado('No se pudo enviar una foto', true); }
   }
 };
+/* Atrás del móvil dentro del editor: primero cierra el texto o el modo */
+function atrasEditorEd() {
+  if (textoEd) { cerrarTextoEd(false); return true; }
+  if (modoEd) { salirModoEd(modoEd === 'dibujo'); return true; }
+  return false;
+}
 
 const menuFoto = $('#menuFoto');
 $('#adjuntar').onclick = e => { e.stopPropagation(); menuFoto.classList.toggle('oculto'); };
@@ -1658,7 +2229,7 @@ async function fotoElegida(input) {
       const c = document.createElement('canvas');
       c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      fotosEd.push({ lienzo: c, giro: 0, texto: '' });
+      fotosEd.push(nuevaFoto(c, 0));
     } catch { estado('No se pudo leer una foto', true); }
     finally { URL.revokeObjectURL(url); }
   }
@@ -1878,6 +2449,21 @@ const zoomVisor = (() => {
   return { reiniciar() { s = 1; tx = 0; ty = 0; dedos.clear(); aplicar(); }, get escala() { return s; } };
 })();
 $('#visorGuardar').onclick = () => { if (fotoEnVisor) guardarAdjunto(fotoEnVisor); };
+$('#visorEditar').onclick = () => { const m = fotoEnVisor; if (!m) return; cerrarVisor(); editarFotoDelChat(m); };
+/* Editar una foto ya enviada o recibida: se abre una copia en el editor y se envía como foto nueva; la original no cambia */
+async function editarFotoDelChat(m) {
+  if (fotosEd.length >= 10) { estado('Ya hay 10 fotos en el editor', true); return; }
+  const r = await cargarAdjunto(m.a, m.m);
+  if (!r) { estado('No se pudo abrir la foto', true); return; }
+  try {
+    const img = new Image(); img.src = r.url; await img.decode();
+    const k = Math.min(1, 1920 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    agregarFoto(c, 0);
+  } catch { estado('No se pudo abrir la foto', true); }
+}
 
 /* ---------- GIFs ----------
    Todo pasa por la función «gifs» de Supabase: GIPHY no ve tu IP, y al enviar uno
@@ -2105,6 +2691,12 @@ function revisarSeleccion() {
 }
 ['select', 'keyup', 'pointerup', 'input', 'blur'].forEach(ev => $('#texto').addEventListener(ev, () => setTimeout(revisarSeleccion, 0)));
 document.addEventListener('selectionchange', revisarSeleccion);
+/* iPhone: al abrir el teclado no encoge la página, la desplaza hacia arriba; la barra sigue a la parte visible */
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const seguir = () => document.documentElement.style.setProperty('--vvArriba', Math.max(0, vv.offsetTop) + 'px');
+  vv.addEventListener('resize', seguir); vv.addEventListener('scroll', seguir); seguir();
+}
 $('#formato').onclick = e => {
   const marca = e.target.dataset?.m; if (!marca) return;
   const t = $('#texto'); const a = t.selectionStart, b = t.selectionEnd;
@@ -2341,6 +2933,7 @@ function menuMensaje(id) {
   } else {
     ops.push({ texto: { foto: 'Guardar foto en el móvil', gif: 'Guardar GIF en el móvil' }[m.k] || 'Guardar audio en el móvil', accion: () => guardarAdjunto(m) });
     if (m.k === 'foto' && mio && !reg.eliminado) ops.push({ texto: m.t ? 'Editar comentario' : 'Añadir comentario', accion: () => empezarEdicion(id) });
+    if (m.k === 'foto') ops.push({ texto: 'Editar foto y reenviar', accion: () => editarFotoDelChat(m) });
   }
   ops.push({
     texto: 'Eliminar para mí', peligro: true, nota: mio && !reg.eliminado
@@ -2453,7 +3046,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.5';
+const VERSION = '5.6';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2937,7 +3530,7 @@ window.addEventListener('popstate', () => {
   if (seleccion && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto')) { salirSeleccion(); return; }
   if (busqueda && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto') && $('#galeria').classList.contains('oculto')) { salirBusqueda(); return; }
   if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
-  if (!$('#editorFotos').classList.contains('oculto')) { cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
+  if (!$('#editorFotos').classList.contains('oculto')) { if (!atrasEditorEd()) cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#ajustes').classList.contains('oculto')) { $('#ajustes').classList.add('oculto'); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#galeria').classList.contains('oculto')) { $('#galeria').classList.add('oculto'); return; }
   mostrarPortada();
@@ -2989,7 +3582,7 @@ document.addEventListener('click', () => { if (ES_IOS) pedirSensor(); }, { once:
 // Tres toques seguidos con dos dedos
 let toquesDosDedos = [];
 document.addEventListener('touchstart', e => {
-  if (e.touches.length !== 2 || !enElChat()) return;
+  if (e.touches.length !== 2 || !enElChat() || e.target.closest?.('#editorFotos')) return;
   const ahora = Date.now();
   toquesDosDedos = toquesDosDedos.filter(t => ahora - t < 900);
   toquesDosDedos.push(ahora);
