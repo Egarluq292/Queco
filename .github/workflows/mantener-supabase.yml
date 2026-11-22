@@ -1,0 +1,41 @@
+# Supabase pausa los proyectos gratuitos tras una semana sin uso.
+# Esto hace una consulta mínima cada dos días para que no ocurra.
+# Además, GitHub desactiva las tareas programadas de los repositorios públicos
+# sin actividad en 60 días: si el último cambio tiene más de 50 días,
+# se añade un cambio vacío para que siga funcionando.
+name: Mantener Supabase activo
+
+on:
+  schedule:
+    - cron: "17 6 */2 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mantener:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta mínima a la base de datos
+        run: |
+          curl -fsS -X POST "https://kwnxheyfnhwnunlhhpps.supabase.co/rest/v1/rpc/escribiendo" \
+            -H "apikey: sb_publishable_d2JVmRdZ6grY54z2KvrR6w_vaqhbMxH" \
+            -H "Content-Type: application/json" \
+            -d '{"p_sala":"0000000000000000000000000000000000000000000000000000000000000000","p_disp":"mantenimiento"}'
+          echo " → Supabase responde"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Mantener activo el repositorio
+        run: |
+          ultimo=$(git log -1 --format=%ct)
+          ahora=$(date +%s)
+          if [ $(( (ahora - ultimo) / 86400 )) -ge 50 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Mantener activas las tareas programadas"
+            git push
+          fi
