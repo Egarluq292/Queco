@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src 'self' data: blob:; media-src blob: mediastream:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https://*.supabase.co; img-src 'self' data: blob:; media-src blob: mediastream:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#3b4752">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icono-192.png">
@@ -2199,7 +2199,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '4.9';
+const VERSION = '5.0';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -2645,6 +2645,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
+  setTimeout(aplicarActualizacion, 300);
   salirSeleccion();
   cerrarCamara(); cerrarVisor(); cerrarHoja(); cerrarEditor(); cerrarPanelEmoji(); cerrarPanelGif();
   menuFoto.classList.add('oculto');
@@ -2737,6 +2738,29 @@ document.addEventListener('touchstart', e => {
   toquesDosDedos.push(ahora);
   if (toquesDosDedos.length >= 3) { toquesDosDedos = []; e.preventDefault(); cierreEmergencia(); }
 }, { passive: false });
+
+/* ---------- Actualización automática ----------
+   Al volver a la app (y cada 10 minutos) se mira si hay una versión nueva publicada.
+   Si la hay, se recarga sola en cuanto estás en la portada, sin interrumpir nada. */
+let actualizacionPendiente = false, ultimaComprobacion = 0;
+async function comprobarActualizacion(forzar = false) {
+  if (!forzar && Date.now() - ultimaComprobacion < 600000) return;
+  ultimaComprobacion = Date.now();
+  try {
+    const r = await fetch('./index.html?v=' + Date.now(), { cache: 'no-store' });
+    const v = (await r.text()).match(/const VERSION = '([^']+)'/)?.[1];
+    if (v && v !== VERSION) { actualizacionPendiente = true; aplicarActualizacion(); }
+  } catch {}
+}
+function aplicarActualizacion() {
+  if (!actualizacionPendiente || document.visibilityState !== 'visible') return;
+  if ($('#portada').classList.contains('oculto')) return; // solo desde la portada
+  if (!leerSesion() && !clave) { location.reload(); return; }
+  if (!leerSesion()) { estado('Hay una versión nueva: cierra la app y vuelve a abrirla'); return; } // sin sesión guardada, no se recarga
+  location.reload();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') comprobarActualizacion(true); });
+setInterval(() => { if (document.visibilityState === 'visible') comprobarActualizacion(); }, 60000);
 
 /* ---------- Inicio ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
