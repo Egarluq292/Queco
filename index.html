@@ -419,6 +419,16 @@
   .msj .pie { padding: 4px 8px 0; }
 
   /* Visor de fotos */
+  /* Barra de reacción con doble toque */
+  #barraReac {
+    position: fixed; z-index: 12; display: flex; gap: 2px; padding: 5px 6px; border-radius: 99px;
+    background: var(--panel); border: 1px solid var(--borde); box-shadow: 0 8px 28px rgba(0,0,0,.28);
+    animation: aparecerReac .16s ease-out;
+  }
+  #barraReac button { width: 42px; height: 42px; border: 0; border-radius: 50%; background: none; font-size: 25px; line-height: 1; padding: 0; cursor: pointer; }
+  #barraReac button.mia { background: color-mix(in srgb, var(--acento) 28%, transparent); }
+  #barraReac button.masEmoji { font-size: 22px; color: var(--suave); background: color-mix(in srgb, var(--borde) 60%, transparent); }
+  @keyframes aparecerReac { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
   /* Fotos ocultas hasta tocarlas */
   .fotoOculta { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px 2px; cursor: pointer; min-width: 170px; }
   .icOculta { width: 42px; height: 42px; flex: none; border-radius: 10px; display: grid; place-items: center; background: rgba(127,127,127,.18); }
@@ -728,6 +738,7 @@
 </div>
 
 <!-- Hoja de acciones -->
+<div id="barraReac" class="oculto" role="menu" aria-label="Reaccionar"></div>
 <div id="velo" class="velo oculto">
   <div class="hoja">
     <div class="emojis oculto" id="hojaEmojis"></div>
@@ -914,6 +925,19 @@ let editandoId = null, respondiendoA = null;
 let nuevosSinVer = 0;
 const reacciones = new Map(); // id del mensaje-reacción → { o: id del mensaje, d: dispositivo, e: emoji }
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+/* Reacciones a mano: las que más usas en este móvil (las últimas 60 cuentan; a igualdad, la más reciente) */
+const CLAVE_USO_REAC = 'susurro.reacUso';
+function usoReacciones() { try { return JSON.parse(localStorage.getItem(CLAVE_USO_REAC) || '[]'); } catch { return []; } }
+function anotarReaccion(e) { try { localStorage.setItem(CLAVE_USO_REAC, JSON.stringify([...usoReacciones(), e].slice(-60))); } catch {} }
+function reaccionesFrecuentes(n = 6, actual = null) {
+  const puntos = new Map();
+  usoReacciones().forEach((e, i) => puntos.set(e, (puntos.get(e) || 0) + 1 + i / 1000));
+  const orden = [...puntos].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  for (const e of EMOJIS) if (!orden.includes(e)) orden.push(e);
+  let lista = orden.slice(0, n);
+  if (actual && !lista.includes(actual)) lista = [actual, ...lista.slice(0, n - 1)];
+  return lista;
+}
 /* «Visto»: el móvil de tu colega avisa de hasta dónde ha leído; solo el administrador lo ve */
 let vistoHasta = 0, miVisto = { id: 0, u: 0 };
 
@@ -1300,6 +1324,7 @@ async function reaccionar(objetivo, emoji) {
   try {
     if (mia) { await rpc('borrar', { p_sala: sala, p_id: mia.id, p_adj: null }); reacciones.delete(mia.id); }
     if (emoji && emoji !== mia?.e) {
+      anotarReaccion(emoji);
       const id = await enviarMensaje({ k: 'reaccion', o: objetivo, e: emoji });
       if (Number.isInteger(id)) reacciones.set(id, { o: objetivo, d: disp, e: emoji });
     }
@@ -3075,7 +3100,7 @@ function abrirHoja(opciones, { emojis = null } = {}) {
   const fila = $('#hojaEmojis'); fila.replaceChildren();
   fila.classList.toggle('oculto', !emojis);
   if (emojis) {
-    const lista = EMOJIS.includes(emojis.actual) || !emojis.actual ? EMOJIS.slice(0, 6) : [emojis.actual, ...EMOJIS.slice(0, 5)];
+    const lista = reaccionesFrecuentes(6, emojis.actual);
     for (const e of lista) {
       const b = document.createElement('button'); b.textContent = e;
       if (emojis.actual === e) b.className = 'mia';
@@ -3273,6 +3298,37 @@ $('#selAcciones').onclick = () => {
   abrirHoja(ops);
 };
 
+/* Doble toque en un mensaje: barra flotante con tus reacciones habituales y «+» para el resto */
+function abrirBarraReac(id) {
+  const reg = mensajes.get(id);
+  if (!reg || reg.eliminado || !reg.el) return;
+  const actual = reaccionesDe(id).get(disp)?.e;
+  const barra = $('#barraReac'); barra.replaceChildren();
+  const elegir = e => { cerrarBarraReac(); reaccionar(id, e); };
+  for (const e of reaccionesFrecuentes(6, actual)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = e;
+    if (e === actual) { b.className = 'mia'; b.setAttribute('aria-label', 'Quitar ' + e); }
+    b.onclick = () => elegir(e); // tocar la que ya tienes la quita
+    barra.append(b);
+  }
+  const mas = document.createElement('button'); mas.type = 'button'; mas.className = 'masEmoji'; mas.textContent = '+';
+  mas.setAttribute('aria-label', 'Más emojis');
+  mas.onclick = () => { cerrarBarraReac(); abrirPanelEmoji(e => reaccionar(id, e)); };
+  barra.append(mas);
+  barra.classList.remove('oculto');
+  const r = reg.el.getBoundingClientRect(), w = barra.offsetWidth, h = barra.offsetHeight;
+  const arribaMin = ($('#abrirAjustes').getBoundingClientRect().bottom || 56) + 8;
+  let top = r.top - h - 8;
+  if (top < arribaMin) top = Math.min(r.bottom + 8, innerHeight - h - 90);
+  top = Math.max(arribaMin, top);
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  barra.style.top = top + 'px'; barra.style.left = left + 'px';
+  navigator.vibrate?.(10);
+}
+function cerrarBarraReac() { $('#barraReac').classList.add('oculto'); }
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#barraReac')) cerrarBarraReac(); }, true);
+$('#lista').addEventListener('scroll', cerrarBarraReac, { passive: true });
+
 function menuMensaje(id) {
   const reg = mensajes.get(id);
   if (!reg) return;
@@ -3352,7 +3408,18 @@ function puedeEditar(id) {
     if (listo && !avisado) { avisado = true; navigator.vibrate?.(10); }
     if (!listo) avisado = false;
   });
-  const fin = () => {
+  let dobleTap = { id: null, t: 0, x: 0, y: 0 }, tapDiferido = null, dobleHechoEn = 0;
+  const fin = e => {
+    if (e?.type === 'pointerup' && burbuja && !modo && !largo && !seleccion && !e.target.closest('a, .reproductor, .cita, .reac')) {
+      const id = Number(burbuja.dataset.id), ahora = Date.now();
+      if (dobleTap.id === id && ahora - dobleTap.t < 320 && Math.hypot(e.clientX - dobleTap.x, e.clientY - dobleTap.y) < 40) {
+        clearTimeout(tapDiferido); tapDiferido = null; dobleTap = { id: null, t: 0 }; dobleHechoEn = ahora;
+        pararReloj(); soltar();
+        abrirBarraReac(id);
+        return;
+      }
+      dobleTap = { id, t: ahora, x: e.clientX, y: e.clientY };
+    }
     pararReloj();
     if (burbuja && modo === 'h') {
       const id = Number(burbuja.dataset.id);
@@ -3370,7 +3437,14 @@ function puedeEditar(id) {
     e.preventDefault();
     if (!largo) { pararReloj(); largo = true; menuMensaje(Number(b.dataset.id)); soltar(); }
   });
+  // Abrir una foto o un vídeo espera un instante por si llega un segundo toque (doble toque = reaccionar)
+  const diferir = (id, accion) => {
+    if (mensajes.get(id)?.eliminado) { accion(); return; }
+    clearTimeout(tapDiferido);
+    tapDiferido = setTimeout(() => { tapDiferido = null; accion(); }, 300);
+  };
   lista.addEventListener('click', e => {
+    if (Date.now() - dobleHechoEn < 450) { e.preventDefault(); e.stopPropagation(); return; }
     if (largo || arrastrado) { e.preventDefault(); e.stopPropagation(); largo = false; arrastrado = false; return; }
     if (!seleccion && e.target.closest('.reproductor')) return;
     if (seleccion) {
@@ -3393,14 +3467,14 @@ function puedeEditar(id) {
     const oculta = e.target.closest('.msj.con-oculta');
     if (oculta?.dataset.id && e.target.closest('.fotoOculta')) {
       const id = Number(oculta.dataset.id), k = mensajes.get(id)?.m.k;
-      if (k === 'video') abrirVideo(id); else if (k) abrirVisor(id);
+      if (k === 'video') diferir(id, () => abrirVideo(id)); else if (k) diferir(id, () => abrirVisor(id));
       return;
     }
     const conFoto = e.target.closest('.msj.con-foto');
     if (conFoto?.dataset.id && !e.target.closest('.pie, .reac, .cita, .hora')) {
-      const k = mensajes.get(Number(conFoto.dataset.id))?.m.k;
-      if (k === 'foto') abrirVisor(Number(conFoto.dataset.id));
-      else if (k === 'video') abrirVideo(Number(conFoto.dataset.id));
+      const id = Number(conFoto.dataset.id), k = mensajes.get(id)?.m.k;
+      if (k === 'foto') diferir(id, () => abrirVisor(id));
+      else if (k === 'video') diferir(id, () => abrirVideo(id));
     }
   }, true);
 })();
@@ -3409,7 +3483,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '5.9';
+const VERSION = '6.0';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3650,7 +3724,7 @@ async function desbloquear() {
 
 function cerrarConversacion() {
   clearInterval(temporizador);
-  cerrarCamara(); cerrarVisor(); cerrarVideo(); cerrarPrep(); colaVideos.length = 0; cerrarHoja();
+  cerrarCamara(); cerrarVisor(); cerrarVideo(); cerrarBarraReac(); cerrarPrep(); colaVideos.length = 0; cerrarHoja();
   if (editandoId !== null) terminarEdicion();
   terminarRespuesta(); ocultarNuevos(); salirSeleccion(); salirBusqueda();
   $('#estadoOtro').classList.add('oculto');
@@ -3936,6 +4010,7 @@ window.addEventListener('popstate', () => {
   if (!$('#portada').classList.contains('oculto')) { if (paginaPortada !== 'inicio') pintarPagina('inicio'); return; }
   if (seleccion && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto')) { salirSeleccion(); return; }
   if (busqueda && !$('#chat').classList.contains('oculto') && $('#visor').classList.contains('oculto') && $('#galeria').classList.contains('oculto')) { salirBusqueda(); return; }
+  if (!$('#barraReac').classList.contains('oculto')) { cerrarBarraReac(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#visorVideo').classList.contains('oculto')) { cerrarVideo(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#visor').classList.contains('oculto')) { cerrarVisor(); history.pushState({ chat: 1 }, ''); return; }
   if (!$('#editorFotos').classList.contains('oculto')) { if (!atrasEditorEd()) cerrarEditor(); history.pushState({ chat: 1 }, ''); return; }
