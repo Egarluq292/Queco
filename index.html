@@ -109,7 +109,7 @@
   #blindarChat .punto { position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%; background: var(--error, #d9534f); border: 2px solid var(--panel); }
   #blindarChat.hecho svg { fill: var(--acento); }
   #blindarChat.hecho .ok { display: inline; }
-  #blindarChat.hecho .punto { display: none; }
+  #blindarChat.hecho .punto, #blindarChat.libre .punto { display: none; }
   #novedades h3 { margin: 0 0 4px; font-size: 17px; text-align: center; }
   #novedadesLista { max-height: 58vh; overflow-y: auto; display: grid; gap: 12px; padding: 4px 14px 8px; }
   #novedades h3 { padding-top: 12px; }
@@ -3509,7 +3509,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.2';
+const VERSION = '6.3';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3534,31 +3534,61 @@ $('#abrirAjustes').onclick = abrirAjustes;
 $('#intPortada').onchange = e => { ajustes.portada = e.target.checked; guardarAjustes(); pintarBlindar(); };
 /* «Proteger todo de un toque»: sin avisos, con PIN y con portada, para no olvidarse de nada */
 const blindado = () => !ajustes.notif && pinActivo() && !!ajustes.portada;
+const desprotegido = () => !!ajustes.notif && !pinActivo() && !ajustes.portada;
 function pintarBlindar() {
-  const b = $('#blindarBtn'), ok = blindado();
-  $('#blindarChat').classList.toggle('hecho', ok);
-  $('#blindarChat').setAttribute('aria-label', ok ? 'Todo protegido' : 'Proteger todo');
-  b.textContent = ok ? '✓ Todo protegido' : 'Proteger todo de un toque';
+  const b = $('#blindarBtn'), ok = blindado(), libre = desprotegido(), esc = $('#blindarChat');
+  esc.classList.toggle('hecho', ok);
+  esc.classList.toggle('libre', libre);
+  esc.setAttribute('aria-label', ok ? 'Protección activada' : 'Activar protección');
+  b.textContent = ok ? 'Desactivar la protección' : 'Proteger todo de un toque';
   b.classList.toggle('hecho', ok);
   const falta = [ajustes.notif && 'desactivar los avisos', !pinActivo() && 'activar el PIN', !ajustes.portada && 'activar la portada de ajustes'].filter(Boolean);
   $('#ayudaBlindar').textContent = ok
-    ? 'Avisos desactivados, bloqueo con PIN y portada de ajustes al abrir.'
+    ? 'Ahora: sin avisos, con PIN y portada de ajustes al abrir.'
+    : libre ? 'Ahora: con avisos, la app abre directa al chat y sin PIN.'
     : 'Falta ' + (falta.length > 1 ? falta.slice(0, -1).join(', ') + ' y ' + falta.at(-1) : falta[0]) + '.';
 }
+function marcarInterruptores() {
+  $('#intNotif').checked = !!ajustes.notif; $('#intPortada').checked = !!ajustes.portada; $('#intPin').checked = pinActivo();
+}
+/* Activar: sin avisos, portada de ajustes y PIN (si ya lo tenías, se recupera sin volver a escribirlo) */
 async function blindarTodo() {
-  if (blindado()) { estado('Todo protegido: sin avisos, con PIN y portada'); return; }
   if (ajustes.notif) { await desuscribirse(); ajustes.notif = false; ayudaNotif('Desactivadas.'); }
   ajustes.portada = true;
   guardarAjustes();
   let pinOk = pinActivo();
-  if (!pinOk) pinOk = await crearPin();
-  $('#intNotif').checked = false; $('#intPortada').checked = true; $('#intPin').checked = pinOk;
-  pintarBlindar();
+  if (!pinOk) {
+    const s = leerSesion();
+    if (s?.kcGuardado && s?.psGuardado) {
+      localStorage.setItem(ALMACEN, JSON.stringify({ kc: s.kcGuardado, ps: s.psGuardado, s: s.s, n: s.n ?? yo }));
+      pinOk = true;
+    } else pinOk = await crearPin();
+  }
+  marcarInterruptores(); pintarBlindar();
   navigator.vibrate?.(30);
-  estado(pinOk ? 'Todo protegido' : 'Avisos y portada listos; el PIN no se activó', !pinOk);
+  estado(pinOk ? 'Protección activada' : 'Avisos y portada listos; el PIN no se activó', !pinOk);
 }
-$('#blindarBtn').onclick = blindarTodo;
-$('#blindarChat').onclick = blindarTodo;
+/* Desactivar: con avisos, la app abre directa al chat y sin PIN (el PIN se guarda cifrado para volver a ponerlo) */
+async function desprotegerTodo() {
+  if (!await confirmar('Se activarán los avisos, la app abrirá directamente el chat y no pedirá PIN.', 'Desactivar la protección')) return;
+  const s = leerSesion();
+  if (s?.kc && crudoActual) {
+    localStorage.setItem(ALMACEN, JSON.stringify({ k: aB64(crudoActual), s: s.s, n: s.n ?? yo, kcGuardado: s.kc, psGuardado: s.ps }));
+  }
+  ajustes.portada = false;
+  guardarAjustes();
+  let avisosOk = true;
+  if (!ajustes.notif) {
+    try { await suscribirse(true); ajustes.notif = true; ayudaNotif('Activadas. El aviso solo dice «Hay novedades», sin nombre ni contenido.'); }
+    catch (err) { avisosOk = false; ayudaNotif(err.message || 'No se pudieron activar.'); }
+    guardarAjustes();
+  }
+  marcarInterruptores(); pintarBlindar();
+  estado(avisosOk ? 'Protección desactivada' : 'Protección desactivada, pero los avisos no se pudieron activar', !avisosOk);
+}
+const alternarProteccion = () => blindado() ? desprotegerTodo() : blindarTodo();
+$('#blindarBtn').onclick = alternarProteccion;
+$('#blindarChat').onclick = alternarProteccion;
 $('#intOcultarFotos').onchange = e => {
   ajustes.ocultarFotos = e.target.checked; guardarAjustes();
   for (const [id, reg] of mensajes) {
@@ -4020,6 +4050,8 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['6.3', ['El escudo del chat ahora activa y desactiva. Activado (con ✓): sin avisos, con PIN y portada de ajustes al abrir. Desactivado: con avisos, la app abre directa al chat y sin PIN. Si sale con un punto rojo, está a medias: un toque lo protege todo.',
+           'Al desactivarlo pide confirmación; al volver a activarlo recupera tu PIN sin tener que escribirlo.']],
   ['6.2', ['Tus mensajes llevan un ✓ cuando se han enviado correctamente (tócalo para verlo). Solo indica que el envío fue bien: no dice si al otro le ha llegado ni si lo ha leído.']],
   ['6.1', ['Escudo en el chat, arriba junto a los ajustes: de un toque desactiva los avisos, activa el PIN y la portada de ajustes. Si tiene un punto rojo, falta algo por proteger; si lleva un ✓, está todo.',
            'Tras cada actualización verás aquí lo nuevo.']],
