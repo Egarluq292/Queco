@@ -134,6 +134,7 @@
     padding: 4px 11px; border-radius: 99px; font-size: 12px; color: var(--suave);
     background: var(--panel); border: 1px solid var(--borde); box-shadow: 0 2px 8px rgba(0,0,0,.08);
   }
+  #chat.sinAdmin .msj.eliminado { display: none; }
   #estadoOtro.linea { color: var(--acento); font-weight: 600; }
   #estadoOtro.linea::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #3fbf6f; margin-right: 6px; vertical-align: 1px; }
   /* Reproductor de audio */
@@ -730,6 +731,12 @@
       <h2>Administrador</h2>
       <div class="grupo">
         <div class="opcion">
+          <div class="etq">Funciones de administrador
+            <label class="interruptor"><input type="checkbox" id="intAdmin"><span></span></label>
+          </div>
+          <div class="ayuda" id="ayudaAdmin">Este móvil es el administrador. Ves «visto», «escribiendo…», «en línea / última vez» y los mensajes que borra tu colega. Apagado, el chat se ve como el suyo.</div>
+        </div>
+        <div class="opcion" id="opcionConservar">
           <div class="etq">Conservar los mensajes que borre mi colega
             <label class="interruptor"><input type="checkbox" id="intConservar"><span></span></label>
           </div>
@@ -990,6 +997,8 @@ const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajuste
 const ADMIN_DISPOSITIVOS = ['ee23-f250'];
 const idCorto = () => disp.slice(0, 4) + '-' + disp.slice(4, 8);
 const esAdmin = () => ADMIN_DISPOSITIVOS.includes(idCorto());
+/* El administrador puede apagar sus funciones (visto, escribiendo, en línea, borrados conservados) y ver el chat como su colega */
+const adminActivo = () => esAdmin() && ajustes.admin !== false;
 function aplicarApariencia() {
   if (ajustes.tema === 'auto') document.documentElement.removeAttribute('data-tema');
   else document.documentElement.setAttribute('data-tema', ajustes.tema);
@@ -1300,14 +1309,14 @@ function aplicarCambio(id, m, datos = null, eliminado = false) {
   if (reacciones.size) pintarReacciones(id);
 }
 function pintarVistos() {
-  if (!esAdmin()) return;
+  const activo = adminActivo();
   for (const [id, reg] of mensajes) {
     const c = reg.el.querySelector('.hora .check');
     if (!c) continue;
-    const visto = id <= vistoHasta;
+    const visto = activo && id <= vistoHasta;
     c.textContent = visto ? '✓✓' : '✓';
     c.classList.toggle('visto', visto);
-    c.title = visto ? 'Visto' : 'Enviado';
+    c.title = visto ? 'Visto' : activo ? 'Enviado' : 'Enviado correctamente';
   }
 }
 let informando = false;
@@ -1463,7 +1472,7 @@ async function leer() {
         if (f.datos === null && mensajes.has(f.id)) {
           const reg = mensajes.get(f.id);
           // Lo borró quien lo envió: si fue tu colega, se queda en tu móvil marcado en rojo
-          if (esAdmin() && ajustes.conservar && reg.m.d !== disp && !reg.eliminado && !(reg.m.x && reg.m.x < Date.now())) { await conservarBorrado(f.id); cambios = true; continue; }
+          if (adminActivo() && ajustes.conservar && reg.m.d !== disp && !reg.eliminado && !(reg.m.x && reg.m.x < Date.now())) { await conservarBorrado(f.id); cambios = true; continue; }
           if (reg.eliminado) continue;
         }
         if (f.datos === '' && mensajes.get(f.id)?.eliminado) quitarBorrado(f.id);
@@ -1552,7 +1561,7 @@ function textoUltimaVez(ultima, ahora) {
 }
 let comprobandoEscritura = false, presenciaAntigua = false;
 async function comprobarEscribiendo() {
-  if (!esAdmin() || !clave || comprobandoEscritura) return;
+  if (!adminActivo() || !clave || comprobandoEscritura) return;
   comprobandoEscritura = true;
   try {
     if (presenciaAntigua) throw new Error('antigua');
@@ -3591,7 +3600,7 @@ function puedeEditar(id) {
       } else estado('Ese mensaje ya no existe');
       return;
     }
-    if (e.target.closest('.hora .check') && !esAdmin()) { estado('Enviado correctamente'); return; }
+    if (e.target.closest('.hora .check') && !adminActivo()) { estado('Enviado correctamente'); return; }
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
     const oculta = e.target.closest('.msj.con-oculta');
@@ -3613,7 +3622,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.0';
+const VERSION = '7.1';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3622,6 +3631,8 @@ function modoPantalla() {
 function abrirAjustes() {
   $('#version').textContent = `Versión ${VERSION} · ${modoPantalla()} · dispositivo ${idCorto()}`;
   $('#grupoAdmin').classList.toggle('oculto', !esAdmin());
+  $('#intAdmin').checked = adminActivo();
+  $('#opcionConservar').classList.toggle('oculto', !adminActivo());
   $('#intConservar').checked = !!ajustes.conservar;
   marcarSegmento('#segTema', ajustes.tema);
   marcarSegmento('#segLetra', String(ajustes.letra));
@@ -3704,6 +3715,19 @@ $('#intOcultarFotos').onchange = e => {
     if (reacciones.size) pintarReacciones(id);
   }
   pintarVistos();
+};
+function aplicarModoAdmin() {
+  const activo = adminActivo();
+  $('#chat').classList.toggle('sinAdmin', esAdmin() && !activo);
+  pintarVistos();
+  if (!activo) { $('#estadoOtro').classList.add('oculto'); mostrarEscribiendo(false); }
+  else comprobarEscribiendo();
+}
+$('#intAdmin').onchange = e => {
+  ajustes.admin = e.target.checked; guardarAjustes();
+  $('#opcionConservar').classList.toggle('oculto', !e.target.checked);
+  aplicarModoAdmin();
+  estado(e.target.checked ? 'Funciones de administrador activadas' : 'Funciones de administrador desactivadas');
 };
 $('#intConservar').onchange = e => { ajustes.conservar = e.target.checked; guardarAjustes(); };
 $('#cerrarAjustes').onclick = () => $('#ajustes').classList.add('oculto');
@@ -3978,6 +4002,7 @@ async function entrarCon(crudo, salaId, nombre) {
   arrancarSondeo();
   if (ajustes.notif) suscribirse(false).catch(() => {});
   pintarBlindar();
+  aplicarModoAdmin();
   setTimeout(revisarNovedades, 700);
 }
 
