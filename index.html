@@ -1032,9 +1032,13 @@ const llave = () => disp + '.' + secretoDisp;
 const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true, portada: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
 const guardarAjustes = () => localStorage.setItem(AJUSTES, JSON.stringify(ajustes));
 /* Administrador: el móvil cuyo identificador está en esta lista (se ve en Ajustes, abajo del todo) */
-const ADMIN_DISPOSITIVOS = ['ee23-f250'];
+// Se guarda la huella SHA-256 del código, no el código, para que no se lea en el código de la web
+const ADMIN_HUELLAS = ['5aac24db7c67847aee75e94f155bacdd349320c24489a40735cad7b0f2e9355a'];
 const idCorto = () => disp.slice(0, 4) + '-' + disp.slice(4, 8);
-const esAdmin = () => ADMIN_DISPOSITIVOS.includes(idCorto());
+let soyAdmin = false;
+const adminListo = crypto.subtle.digest('SHA-256', new TextEncoder().encode(idCorto()))
+  .then(h => { soyAdmin = ADMIN_HUELLAS.includes(aHex(new Uint8Array(h))); });
+const esAdmin = () => soyAdmin;
 /* El administrador puede apagar sus funciones (visto, escribiendo, en línea, borrados conservados) y ver el chat como su colega */
 const adminActivo = () => esAdmin() && ajustes.admin !== false;
 function aplicarApariencia() {
@@ -3669,7 +3673,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.4';
+const VERSION = '7.5';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3965,7 +3969,8 @@ async function listaMoviles() {
 }
 const fechaCorta = t => { const d = new Date(t); return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) + ' a las ' + fmtHora(d); };
 function describirMovil(f) {
-  return { titulo: f.yo ? 'Este móvil' : f.estado === 'pendiente' ? 'Un móvil nuevo' : 'Otro móvil', detalle: [f.datos.m, f.disp.slice(0, 4) + '-' + f.disp.slice(4, 8), f.estado === 'pendiente' ? 'pide entrar desde el ' + fechaCorta(f.creado) : 'última vez el ' + fechaCorta(f.visto)].filter(Boolean).join(' · ') };
+  // El código solo se enseña del propio móvil; la «última vez», solo al administrador con sus funciones activadas
+  return { titulo: f.yo ? 'Este móvil' : f.estado === 'pendiente' ? 'Un móvil nuevo' : 'Otro móvil', detalle: [f.datos.m, f.yo ? idCorto() : null, f.estado === 'pendiente' ? 'pide entrar desde el ' + fechaCorta(f.creado) : (adminActivo() && !f.yo ? 'última vez el ' + fechaCorta(f.visto) : null)].filter(Boolean).join(' · ') };
 }
 async function decidirMovil(f, admitir) {
   try {
@@ -4004,7 +4009,7 @@ async function pintarSala() {
       fila.append(si, no);
     } else if (!f.yo) {
       const q = document.createElement('button'); q.textContent = 'Quitar'; q.className = 'peligro';
-      q.onclick = async () => { if (await confirmar(`${titulo} (${f.datos.m || 'móvil'} · ${f.disp.slice(0, 4)}-${f.disp.slice(4, 8)}) dejará de poder entrar${cerrada ? '' : ' cuando la sala esté cerrada'}. Si es un móvil que aún usáis, tendrá que volver a pedir permiso.`, 'Quitar este móvil')) decidirMovil(f, false); };
+      q.onclick = async () => { if (await confirmar(`${titulo} (${detalle}) dejará de poder entrar${cerrada ? '' : ' cuando la sala esté cerrada'}. Si es un móvil que aún usáis, tendrá que volver a pedir permiso.`, 'Quitar este móvil')) decidirMovil(f, false); };
       fila.append(q);
     }
     cont.append(fila);
@@ -4194,6 +4199,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function entrarCon(crudo, salaId, nombre) {
+  await adminListo;
   limpiarCache(); mensajes.clear(); reacciones.clear();
   vistoHasta = 0; miVisto = { id: 0, u: 0 };
   crudoActual = crudo;
