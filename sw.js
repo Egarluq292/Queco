@@ -2,7 +2,7 @@
 // Guarda solo la propia app (no los mensajes) para poder abrirla sin red,
 // y muestra los avisos de mensajes nuevos. Siempre intenta la red primero,
 // así las actualizaciones llegan solas.
-const CACHE = 'susurro-v56';
+const CACHE = 'susurro-v57';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icono-192.png', './icono-512.png'];
 const ES_IOS = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
 
@@ -37,7 +37,9 @@ self.addEventListener('push', e => {
       icon: 'icono-192.png',
       badge: 'icono-192.png',
       tag: 'novedades',
-      renotify: true
+      renotify: true,
+      vibrate: [120, 60, 120],
+      timestamp: Date.now()
     });
   })());
 });

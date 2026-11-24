@@ -697,6 +697,7 @@
         </div>
         <div class="ayuda" id="ayudaNotif">El aviso solo dice «Hay novedades», sin nombre ni contenido.</div>
       </div>
+      <button class="botonFila" id="probarAvisos">Enviar un aviso de prueba a este móvil</button>
     </div>
 
     <h2>Privacidad</h2>
@@ -3612,7 +3613,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.7';
+const VERSION = '6.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3777,6 +3778,23 @@ $('#intNotif').onchange = async e => {
     ayudaNotif('Desactivadas.');
   }
   guardarAjustes(); pintarBlindar();
+};
+
+$('#probarAvisos').onclick = async () => {
+  if (!ajustes.notif) { ayudaNotif('Primero activa los avisos.'); return; }
+  const b = $('#probarAvisos'); b.disabled = true;
+  try {
+    await suscribirse(false); // por si la suscripción había caducado
+    ayudaNotif('Enviado. Bloquea el móvil ahora: el aviso debería llegar en unos 10 segundos.');
+    const r = await funcionAvisar({ accion: 'probar', sala, disp });
+    if (r?.error) throw new Error(r.error);
+    if (!r?.suscritos) ayudaNotif('Este móvil no figura como suscrito. Desactiva y vuelve a activar los avisos.');
+    else if (!r.enviados) ayudaNotif('El servicio de avisos del móvil rechazó el envío. Desactiva y vuelve a activar los avisos.');
+    else ayudaNotif('Aviso entregado al servicio del móvil. Si no te ha llegado con la pantalla apagada, el problema está en el ahorro de batería del móvil.');
+  } catch (e) {
+    ayudaNotif(/desconocida|400/.test(String(e?.message)) ? 'Falta actualizar la función «avisar» en Supabase.' : 'No se pudo enviar la prueba: ' + (e?.message || 'error de conexión'));
+  }
+  b.disabled = false;
 };
 
 /* ---------- Sesión y PIN ---------- */
@@ -4153,6 +4171,8 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['6.8', ['Avisos más fiables: se entregan con prioridad alta aunque el móvil esté en reposo.',
+           'Ajustes → Notificaciones → «Enviar un aviso de prueba a este móvil», para comprobar que te llegan con la pantalla apagada.']],
   ['6.7', ['El buscador de emojis (en reacciones y en el editor de fotos) ya busca por nombre en español: corazón, risa, fiesta, pulgar…']],
   ['6.6', ['Con la cámara abierta ya se pueden hacer fotos con el móvil boca abajo (por ejemplo, una selfi desde arriba): el cierre de emergencia por girar el móvil no salta mientras usas la cámara.']],
   ['6.4', ['La conversación se abre directamente en el último mensaje, sin saltos.',

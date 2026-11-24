@@ -57,16 +57,16 @@ Deno.serve(async (req) => {
 
     if (accion === "clave") return respuesta({ publica: k.publica });
 
-    if (accion === "avisar") {
+    if (accion === "avisar" || accion === "probar") {
       if (typeof sala !== "string" || !/^[0-9a-f]{64}$/.test(sala) || typeof disp !== "string") {
         return respuesta({ error: "petición no válida" }, 400);
       }
-      const { data: subs, error } = await db
-        .from("suscripciones")
-        .select("endpoint, p256dh, auth")
-        .eq("sala", sala)
-        .neq("disp", disp);
+      // «avisar»: al otro móvil. «probar»: a este mismo móvil, a los 8 segundos (para probar con la pantalla apagada)
+      let consulta = db.from("suscripciones").select("endpoint, p256dh, auth").eq("sala", sala);
+      consulta = accion === "probar" ? consulta.eq("disp", disp) : consulta.neq("disp", disp);
+      const { data: subs, error } = await consulta;
       if (error) throw error;
+      if (accion === "probar") await new Promise((r) => setTimeout(r, 8000));
 
       webpush.setVapidDetails("https://egarluq292.github.io", k.publica, k.privada);
       let enviados = 0;
@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
           await webpush.sendNotification(
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             JSON.stringify({ t: "novedades" }),
-            { TTL: 86400, urgency: "normal" },
+            // «high»: Android lo entrega al momento aunque el móvil esté en reposo; si no, puede retrasarlo mucho
+            { TTL: 86400, urgency: "high", topic: "novedades" },
           );
           enviados++;
         } catch (e) {
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
           }
         }
       }));
-      return respuesta({ ok: true, enviados });
+      return respuesta({ ok: true, enviados, suscritos: (subs ?? []).length, version: 2 });
     }
 
     return respuesta({ error: "acción desconocida" }, 400);
