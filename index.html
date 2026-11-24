@@ -187,6 +187,7 @@
     display: grid; place-items: center; border-radius: 50%;
   }
   .icono svg { width: 24px; height: 24px; fill: var(--acento); }
+  #lista.preparando { visibility: hidden; }
   #lista {
     contain: strict; overscroll-behavior: contain; overflow-x: hidden;
     overflow-y: auto; padding: calc(58px + env(safe-area-inset-top)) 14px 16px; display: flex; flex-direction: column; gap: 6px;
@@ -1449,6 +1450,7 @@ async function leer() {
     const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 80;
     let filas, cambios = false, propio = false, ajenosNuevos = 0;
     const primeraCarga = ultimaVersion === 0;
+    if (primeraCarga) listaChat.classList.add('preparando');
     do {
       filas = await rpc('leer', { p_sala: sala, p_desde: ultimaVersion });
       for (const f of filas) {
@@ -1494,6 +1496,7 @@ async function leer() {
     }
     estado('Sincronizado');
   } catch { estado('Sin conexión con el servidor', true); }
+  if (listaChat.classList.contains('preparando')) revelarLista(1500);
   leyendo = false;
   informarVisto();
   comprobarEscribiendo();
@@ -3035,7 +3038,19 @@ listaChat.addEventListener('scroll', () => {
   anclaAbajo = distFondo < 60;
 }, { passive: true });
 function irAlFinal() { listaChat.scrollTop = listaChat.scrollHeight; distFondo = 0; anclaAbajo = true; }
+/* Mientras carga, la conversación no se enseña: se muestra ya colocada en el último mensaje */
+let ultimoCambioLista = 0, revelando = false;
+async function revelarLista(maximo) {
+  if (revelando) return;
+  revelando = true;
+  const fin = Date.now() + maximo;
+  ultimoCambioLista = Date.now();
+  while (Date.now() - ultimoCambioLista < 220 && Date.now() < fin) await new Promise(r => setTimeout(r, 40));
+  irAlFinal();
+  requestAnimationFrame(() => { irAlFinal(); listaChat.classList.remove('preparando'); revelando = false; });
+}
 function reanclar() {
+  ultimoCambioLista = Date.now();
   if (reanclaPendiente) return;
   reanclaPendiente = true;
   requestAnimationFrame(() => {
@@ -3556,7 +3571,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.4';
+const VERSION = '6.5';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4097,7 +4112,7 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
-  ['6.4', ['La conversación se abre directamente en el último mensaje.',
+  ['6.4', ['La conversación se abre directamente en el último mensaje, sin saltos.',
            'Al abrir el teclado no se tapan los mensajes, y al responder o editar el mensaje elegido queda a la vista.']],
   ['6.3', ['El escudo del chat ahora activa y desactiva. Activado (con ✓): sin avisos, con PIN y portada de ajustes al abrir. Desactivado: con avisos, la app abre directa al chat y sin PIN. Si sale con un punto rojo, está a medias: un toque lo protege todo.',
            'Al desactivarlo pide confirmación; al volver a activarlo recupera tu PIN sin tener que escribirlo.']],
@@ -4138,7 +4153,9 @@ function mostrarChat() {
   $('#portada').classList.add('oculto');
   $('#chat').classList.remove('oculto');
   history.pushState({ chat: 1 }, '');
+  listaChat.classList.add('preparando');
   irAlFinal();
+  revelarLista(600);
   informarVisto();
   setTimeout(revisarNovedades, 500);
 }
