@@ -3571,7 +3571,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.5';
+const VERSION = '6.6';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4112,6 +4112,7 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['6.6', ['Con la cámara abierta ya se pueden hacer fotos con el móvil boca abajo (por ejemplo, una selfi desde arriba): el cierre de emergencia por girar el móvil no salta mientras usas la cámara.']],
   ['6.4', ['La conversación se abre directamente en el último mensaje, sin saltos.',
            'Al abrir el teclado no se tapan los mensajes, y al responder o editar el mensaje elegido queda a la vista.']],
   ['6.3', ['El escudo del chat ahora activa y desactiva. Activado (con ✓): sin avisos, con PIN y portada de ajustes al abrir. Desactivado: con avisos, la app abre directa al chat y sin PIN. Si sale con un punto rojo, está a medias: un toque lo protege todo.',
@@ -4218,7 +4219,13 @@ window.addEventListener('devicemotion', e => {
   comprobarBocaAbajo('gravedad', g.z * SIGNO_GRAVEDAD < -6.5 && Math.abs(g.x) < 6 && Math.abs(g.y) < 6);
 });
 const bocaAbajo = { gravedad: 0, giro: 0 }; // cada sensor lleva su propia cuenta
+/* Con la cámara abierta no cuenta (selfis desde arriba, fotos de la mesa…). Al cerrarla, sigue sin
+   contar hasta que el móvil vuelva a ponerse boca arriba, para no cerrar el chat al soltar la foto. */
+let bocaAbajoEnPausa = false;
+const camaraAbierta = () => !$('#visorCam').classList.contains('oculto');
 function comprobarBocaAbajo(sensor, abajo) {
+  if (camaraAbierta()) { bocaAbajoEnPausa = true; bocaAbajo[sensor] = 0; return; }
+  if (bocaAbajoEnPausa) { if (!abajo) bocaAbajoEnPausa = false; bocaAbajo[sensor] = 0; return; }
   if (!enElChat() || !abajo) { bocaAbajo[sensor] = 0; return; }
   if (!bocaAbajo[sensor]) bocaAbajo[sensor] = Date.now();
   else if (Date.now() - bocaAbajo[sensor] > 400) { bocaAbajo.gravedad = bocaAbajo.giro = 0; cierreEmergencia(); }
