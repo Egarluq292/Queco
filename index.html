@@ -232,6 +232,7 @@
   .hoja .emojis button.masEmoji { font-size: 24px; color: var(--suave); border: 1px dashed var(--borde); }
   .panelEmoji { padding: 12px; gap: 10px; }
   #emojiEntrada { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo); outline: none; font-size: 16px; text-align: center; }
+  .sinEmojis { grid-column: 1 / -1; text-align: center; color: var(--suave); font-size: 14px; padding: 24px 8px; }
   .rejilla { display: grid; grid-template-columns: repeat(8, 1fr); height: 46vh; overflow-y: auto; align-content: start; overscroll-behavior: contain; }
   .rejilla h3 { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; padding: 10px 4px 4px; position: sticky; top: 0; background: var(--panel); }
   .hoja .rejilla button { font-size: 25px; padding: 6px 0; border: 0 !important; }
@@ -766,8 +767,9 @@
 <div id="panelEmoji" class="velo oculto">
   <div class="hoja">
     <div class="grupoBotones panelEmoji">
-      <input type="text" id="emojiEntrada" placeholder="O escribe uno con el teclado" autocomplete="off" enterkeyhint="done">
+      <input type="search" id="emojiEntrada" placeholder="Buscar: corazón, risa, fiesta…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
       <div class="rejilla" id="emojiRejilla"></div>
+      <div class="rejilla oculto" id="emojiResultados"></div>
     </div>
     <button class="cancelar" id="emojiCancelar">Cancelar</button>
   </div>
@@ -3246,6 +3248,7 @@ function crearListaEmojis(r) {
     for (const e of lista) { const b = document.createElement('button'); b.textContent = e; b.dataset.e = e; r.append(b); }
   }
   r.addEventListener('click', ev => { const e = ev.target.dataset?.e; if (e) elegirEmoji(e); });
+  $('#emojiResultados').addEventListener('click', ev => { const e = ev.target.dataset?.e; if (e) elegirEmoji(e); });
   listaEmojisCreada = true;
 }
 let emojiElegido = null;
@@ -3256,17 +3259,55 @@ function abrirPanelEmoji(elegir) {
   if (!listaEmojisCreada) crearListaEmojis(r);
   r.scrollTop = 0;
   $('#emojiEntrada').value = '';
+  mostrarResultadosEmoji(null);
   $('#panelEmoji').classList.remove('oculto');
+  cargarIndiceEmojis(); // se prepara en segundo plano para que la búsqueda sea inmediata
 }
 function cerrarPanelEmoji() { $('#panelEmoji').classList.add('oculto'); $('#emojiEntrada').blur(); emojiElegido = null; }
 function elegirEmoji(e) { const f = emojiElegido; cerrarPanelEmoji(); if (f) f(e); }
-$('#emojiEntrada').addEventListener('input', e => {
+/* Buscador: nombres y palabras clave en español (datos de Unicode CLDR vía emojibase, licencia MIT).
+   También vale escribir directamente un emoji con el teclado. */
+const sinAcentos = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+let indiceEmojis = null;
+function cargarIndiceEmojis() {
+  if (!indiceEmojis) indiceEmojis = fetch('./emojis-es.txt').then(r => { if (!r.ok) throw 0; return r.text(); })
+    .then(t => t.split('\n').filter(Boolean).map(l => {
+      const [e, txt] = l.split('\t'), [nombre] = txt.split(' | ');
+      return { e, nombre: sinAcentos(nombre), palabras: sinAcentos(txt).split(/[^a-z0-9ñ]+/).filter(Boolean) };
+    }))
+    .catch(() => { indiceEmojis = null; return []; });
+  return indiceEmojis;
+}
+function mostrarResultadosEmoji(lista) {
+  const res = $('#emojiResultados');
+  $('#emojiRejilla').classList.toggle('oculto', !!lista);
+  res.classList.toggle('oculto', !lista);
+  if (!lista) return;
+  res.replaceChildren();
+  if (!lista.length) {
+    const v = document.createElement('p'); v.className = 'sinEmojis'; v.textContent = 'Ningún emoji con ese nombre.'; res.append(v);
+  }
+  for (const e of lista) { const b = document.createElement('button'); b.textContent = e; b.dataset.e = e; res.append(b); }
+  res.scrollTop = 0;
+}
+$('#emojiEntrada').addEventListener('input', async e => {
   const v = e.target.value;
   const partes = segmentador ? [...segmentador.segment(v)].map(s => s.segment) : [...v];
   const emoji = partes.find(g => /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(g));
-  if (emoji) elegirEmoji(emoji);
-  else if (v) e.target.value = ''; // solo se admiten emojis
+  if (emoji) { elegirEmoji(emoji); return; }
+  const q = sinAcentos(v.trim());
+  if (!q) { mostrarResultadosEmoji(null); return; }
+  const indice = await cargarIndiceEmojis();
+  if ($('#emojiEntrada').value !== v) return; // ya se escribió otra cosa
+  const trozos = q.split(/[^a-z0-9ñ]+/).filter(Boolean);
+  const encontrados = indice
+    .filter(x => trozos.every(t => x.palabras.some(p => p.startsWith(t))))
+    .map(x => ({ e: x.e, largo: x.nombre.length, nota: x.nombre === q ? -1 : x.nombre.startsWith(q) ? 0 : x.nombre.split(' ').some(p => p.startsWith(trozos[0])) ? 1 : 2 }))
+    .sort((a, b) => a.nota - b.nota || a.largo - b.largo)
+    .slice(0, 160).map(x => x.e);
+  mostrarResultadosEmoji(encontrados);
 });
+$('#emojiEntrada').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
 $('#emojiCancelar').onclick = cerrarPanelEmoji;
 $('#panelEmoji').onclick = e => { if (e.target.id === 'panelEmoji') cerrarPanelEmoji(); };
 $('#hojaCancelar').onclick = () => { if (!hojaReciente()) cerrarHoja(); };
@@ -3571,7 +3612,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.6';
+const VERSION = '6.7';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4112,6 +4153,7 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['6.7', ['El buscador de emojis (en reacciones y en el editor de fotos) ya busca por nombre en español: corazón, risa, fiesta, pulgar…']],
   ['6.6', ['Con la cámara abierta ya se pueden hacer fotos con el móvil boca abajo (por ejemplo, una selfi desde arriba): el cierre de emergencia por girar el móvil no salta mientras usas la cámara.']],
   ['6.4', ['La conversación se abre directamente en el último mensaje, sin saltos.',
            'Al abrir el teclado no se tapan los mensajes, y al responder o editar el mensaje elegido queda a la vista.']],
