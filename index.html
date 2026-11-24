@@ -499,6 +499,18 @@
   .interruptor span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
   .interruptor input:checked + span { background: var(--acento); }
   .interruptor input:checked + span::after { transform: translateX(20px); }
+  #esperaAcceso { position: absolute; inset: 0; z-index: 30; background: var(--fondo); display: grid; place-items: center; padding: 24px; }
+  #esperaAcceso .caja { max-width: 340px; text-align: center; display: grid; gap: 10px; }
+  #esperaAcceso h3 { margin: 0; font-size: 19px; }
+  #esperaAcceso p { margin: 0; color: var(--suave); font-size: 15px; line-height: 1.45; }
+  #esperaAcceso .codigo { font-size: 13px; letter-spacing: .04em; }
+  .movil { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-top: 1px solid var(--borde); }
+  .movil .datos { flex: 1; min-width: 0; }
+  .movil .datos b { display: block; font-weight: 600; font-size: 15px; }
+  .movil .datos small { display: block; color: var(--suave); font-size: 12.5px; }
+  .movil button { flex: none; border: 1px solid var(--borde); background: none; color: var(--acento); border-radius: 99px; padding: 6px 12px; font-size: 13.5px; cursor: pointer; }
+  .movil button.peligro { color: var(--error, #c0392b); }
+  .movil.pendiente { background: color-mix(in srgb, var(--acento) 8%, transparent); }
   .botonFila { background: none; border: 0; width: 100%; text-align: center; padding: 14px 16px; cursor: pointer; color: var(--acento); font-size: 16px; }
   .botonFila.peligro { color: var(--error); }
   .botonFila.fuerte { font-weight: 600; background: var(--acento); color: var(--acento-txt); border-radius: 12px; width: calc(100% - 20px); margin: 10px 10px 0; }
@@ -613,6 +625,15 @@
   <button class="icono flotante" id="abrirAjustes" aria-label="Ajustes"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10.3 2h3.4l.5 2.6c.6.2 1.2.5 1.7.9l2.5-.9 1.7 2.9-2 1.7c.1.6.1 1.2 0 1.8l2 1.7-1.7 2.9-2.5-.9c-.5.4-1.1.7-1.7.9l-.5 2.6h-3.4l-.5-2.6c-.6-.2-1.2-.5-1.7-.9l-2.5.9-1.7-2.9 2-1.7a5.6 5.6 0 0 1 0-1.8l-2-1.7 1.7-2.9 2.5.9c.5-.4 1.1-.7 1.7-.9L10.3 2ZM12 8.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z" transform="translate(0 1)"/></svg></button>
   <div id="aviso" class="oculto"></div>
   <div id="lista"><p class="vacio" id="vacio">Aún no hay mensajes.</p></div>
+  <div id="esperaAcceso" class="oculto">
+    <div class="caja">
+      <h3>Esperando permiso</h3>
+      <p>Esta sala está cerrada: solo pueden entrar los móviles admitidos.</p>
+      <p>Pide a tu colega que abra la app y pulse <b>«Permitir»</b> en el aviso que le aparecerá.</p>
+      <p class="codigo" id="esperaCodigo"></p>
+      <button type="button" class="botonFila" id="esperaSalir">Salir</button>
+    </div>
+  </div>
   <div id="pie">
     <button id="nuevos" class="oculto" aria-label="Ir a los mensajes nuevos"><svg viewBox="0 0 24 24"><path d="M11 4h2v12.2l5.3-5.3 1.4 1.4L12 20l-7.7-7.7 1.4-1.4 5.3 5.3z"/></svg><b id="nuevosNum">1</b></button>
     <div id="formato" class="oculto">
@@ -742,6 +763,19 @@
           </div>
           <div class="ayuda">Solo en este móvil. Los verás en rojo, marcados como eliminados.</div>
         </div>
+      </div>
+    </div>
+
+    <div id="seccionSala">
+      <h2>Sala</h2>
+      <div class="grupo">
+        <div class="opcion">
+          <div class="etq">Sala cerrada
+            <label class="interruptor"><input type="checkbox" id="intCerrada"><span></span></label>
+          </div>
+          <div class="ayuda" id="ayudaSala">Solo pueden entrar los móviles de esta lista. Un móvil nuevo, aunque sepa el código de acceso, tendrá que pedir permiso y uno de vosotros deberá permitírselo.</div>
+        </div>
+        <div id="listaMoviles"></div>
       </div>
     </div>
 
@@ -989,6 +1023,10 @@ const b64uAU8 = s => deB64(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(
 /* Identificador aleatorio de este dispositivo (viaja cifrado) */
 let disp = localStorage.getItem('susurro.disp');
 if (!disp) { disp = aHex(crypto.getRandomValues(new Uint8Array(8))); localStorage.setItem('susurro.disp', disp); }
+/* Secreto propio de este móvil para la sala cerrada: se genera solo y nunca sale de aquí (al servidor va su huella) */
+let secretoDisp = localStorage.getItem('susurro.token');
+if (!secretoDisp) { secretoDisp = aHex(crypto.getRandomValues(new Uint8Array(24))); localStorage.setItem('susurro.token', secretoDisp); }
+const llave = () => disp + '.' + secretoDisp;
 
 /* ---------- Ajustes locales ---------- */
 const ajustes = Object.assign({ tema: 'auto', letra: 1, notif: false, conservar: true, portada: true }, JSON.parse(localStorage.getItem(AJUSTES) || '{}'));
@@ -1055,11 +1093,19 @@ function cabeceras() {
   if (SUPABASE_KEY.startsWith('eyJ')) h.Authorization = 'Bearer ' + SUPABASE_KEY;
   return h;
 }
+let sinLlaves = false; // el setup.sql aún es el antiguo: las funciones no admiten p_llave
 async function rpc(fn, cuerpo) {
+  const conLlave = !sinLlaves && fn !== 'desuscribir' && !('p_llave' in cuerpo);
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method: 'POST', headers: cabeceras(), body: JSON.stringify(cuerpo), cache: 'no-store', referrerPolicy: 'no-referrer'
+    method: 'POST', headers: cabeceras(), body: JSON.stringify(conLlave ? { ...cuerpo, p_llave: llave() } : cuerpo),
+    cache: 'no-store', referrerPolicy: 'no-referrer'
   });
-  if (!r.ok) throw new Error(fn + ' ' + r.status);
+  if (!r.ok) {
+    let t = ''; try { t = await r.text(); } catch {}
+    if (conLlave && r.status === 404 && /PGRST202|Could not find/i.test(t)) { sinLlaves = true; return rpc(fn, cuerpo); }
+    if (/sala cerrada/.test(t)) { sinAccesoASala(); throw new Error(fn + ' sala cerrada'); }
+    throw new Error(fn + ' ' + r.status);
+  }
   const t = await r.text();
   return t ? JSON.parse(t) : null;
 }
@@ -1595,6 +1641,7 @@ function mostrarEscribiendo(si) {
 
 function arrancarSondeo() {
   clearInterval(temporizador);
+  if (esperandoPermiso) return;
   if (document.visibilityState === 'visible' && clave) { leer(); temporizador = setInterval(leer, INTERVALO); }
 }
 
@@ -3622,13 +3669,14 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.2';
+const VERSION = '7.3';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
   return 'navegador';
 }
 function abrirAjustes() {
+  setTimeout(pintarSala, 50);
   $('#version').textContent = `Versión ${VERSION} · ${modoPantalla()} · dispositivo ${idCorto()}`;
   $('#grupoAdmin').classList.toggle('oculto', !esAdmin());
   $('#intAdmin').checked = adminActivo();
@@ -3867,6 +3915,141 @@ async function recuperarDispositivo(codigo) {
   location.reload();
 }
 
+/* ---------- Sala cerrada ----------
+   Con la sala cerrada, el servidor solo atiende a los móviles admitidos (cada uno con su propia llave).
+   Un móvil nuevo se queda esperando hasta que otro ya admitido le dé permiso. */
+let accesoSala = { cerrada: false, estado: 'admitido' }, esperandoPermiso = null;
+const tipoMovil = () => ES_IOS ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android' : 'Ordenador';
+async function presentarme() {
+  if (sinLlaves || !sala) return accesoSala = { cerrada: false, estado: 'admitido', antigua: sinLlaves };
+  try {
+    const info = await cifrar({ n: yo, m: tipoMovil() });
+    const [r] = await rpc('presentarse', { p_sala: sala, p_llave: llave(), p_info: info });
+    return accesoSala = r || { cerrada: false, estado: 'admitido' };
+  } catch (e) {
+    // 404: el setup.sql aún no tiene la sala cerrada; otro error: sin conexión (se reintenta luego)
+    return accesoSala = { cerrada: false, estado: 'admitido', antigua: /404/.test(e.message) };
+  }
+}
+function esperarPermiso() {
+  clearInterval(temporizador);
+  $('#esperaCodigo').textContent = `Este móvil: ${yo || 'sin nombre'} · ${tipoMovil()} · ${idCorto()}`;
+  $('#esperaAcceso').classList.remove('oculto');
+  clearInterval(esperandoPermiso);
+  esperandoPermiso = setInterval(async () => {
+    if (!sala || document.visibilityState !== 'visible') return;
+    const r = await presentarme();
+    if (r.estado === 'admitido') {
+      clearInterval(esperandoPermiso); esperandoPermiso = null;
+      $('#esperaAcceso').classList.add('oculto');
+      estado('Permiso concedido');
+      continuarEntrada();
+    }
+  }, 4000);
+}
+// El servidor ha contestado «sala cerrada» (p. ej., han quitado este móvil): a pedir permiso
+let comprobandoSinAcceso = false;
+async function sinAccesoASala() {
+  if (esperandoPermiso || comprobandoSinAcceso || !sala) return;
+  comprobandoSinAcceso = true;
+  const r = await presentarme();
+  comprobandoSinAcceso = false;
+  if (r.estado === 'pendiente') esperarPermiso();
+}
+$('#esperaSalir').onclick = () => { clearInterval(esperandoPermiso); esperandoPermiso = null; $('#esperaAcceso').classList.add('oculto'); cerrarConversacion(); mostrarPortada(); };
+
+async function listaMoviles() {
+  const filas = await rpc('moviles', { p_sala: sala, p_llave: llave() });
+  for (const f of filas) f.datos = (f.info && await descifrar(f.info)) || {};
+  return filas;
+}
+const fechaCorta = t => { const d = new Date(t); return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) + ' a las ' + fmtHora(d); };
+function describirMovil(f) {
+  return { titulo: f.yo ? 'Este móvil' : (f.datos.n || 'Sin nombre'), detalle: [f.datos.m, f.disp.slice(0, 4) + '-' + f.disp.slice(4, 8), f.estado === 'pendiente' ? 'pide entrar desde el ' + fechaCorta(f.creado) : 'última vez el ' + fechaCorta(f.visto)].filter(Boolean).join(' · ') };
+}
+async function decidirMovil(f, admitir) {
+  try {
+    await rpc('decidir_movil', { p_sala: sala, p_llave: llave(), p_id: f.id, p_admitir: admitir });
+    estado(admitir ? 'Móvil admitido' : f.estado === 'pendiente' ? 'Solicitud rechazada' : 'Móvil quitado');
+  } catch { estado('No se pudo hacer el cambio', true); }
+  if (!$('#ajustes').classList.contains('oculto')) pintarSala();
+}
+async function pintarSala() {
+  const sec = $('#seccionSala'), cont = $('#listaMoviles');
+  if (sinLlaves || accesoSala.antigua) {
+    sec.classList.remove('oculto'); cont.replaceChildren();
+    $('#intCerrada').disabled = true;
+    $('#ayudaSala').textContent = 'Para usar la sala cerrada hay que ejecutar el setup.sql nuevo en Supabase.';
+    return;
+  }
+  $('#intCerrada').disabled = false;
+  let filas;
+  try { filas = await listaMoviles(); } catch { cont.replaceChildren(); return; }
+  const cerrada = !!filas[0]?.cerrada;
+  $('#intCerrada').checked = cerrada;
+  $('#ayudaSala').textContent = cerrada
+    ? 'Cerrada: solo pueden entrar los móviles admitidos de esta lista. Uno nuevo, aunque sepa el código de acceso, tendrá que pedir permiso.'
+    : 'Abierta: entra cualquiera que sepa el código de acceso. Al cerrarla, solo podrán entrar los móviles de esta lista.';
+  cont.replaceChildren();
+  for (const f of filas) {
+    const fila = document.createElement('div'); fila.className = 'movil' + (f.estado === 'pendiente' ? ' pendiente' : '');
+    const { titulo, detalle } = describirMovil(f);
+    const d = document.createElement('div'); d.className = 'datos';
+    const b = document.createElement('b'); b.textContent = (f.estado === 'pendiente' ? 'Pide entrar: ' : '') + titulo;
+    const sm = document.createElement('small'); sm.textContent = detalle;
+    d.append(b, sm); fila.append(d);
+    if (f.estado === 'pendiente') {
+      const si = document.createElement('button'); si.textContent = 'Permitir'; si.onclick = () => decidirMovil(f, true);
+      const no = document.createElement('button'); no.textContent = 'Rechazar'; no.className = 'peligro'; no.onclick = () => decidirMovil(f, false);
+      fila.append(si, no);
+    } else if (!f.yo) {
+      const q = document.createElement('button'); q.textContent = 'Quitar'; q.className = 'peligro';
+      q.onclick = async () => { if (await confirmar(`«${titulo}» dejará de poder entrar${cerrada ? '' : ' cuando la sala esté cerrada'}. Si es un móvil que aún usáis, tendrá que volver a pedir permiso.`, 'Quitar este móvil')) decidirMovil(f, false); };
+      fila.append(q);
+    }
+    cont.append(fila);
+  }
+}
+$('#intCerrada').onchange = async e => {
+  const cerrar = e.target.checked;
+  e.target.checked = !cerrar; // hasta confirmar
+  let otros = 0;
+  try { otros = (await listaMoviles()).filter(f => !f.yo && f.estado === 'admitido').length; } catch {}
+  const texto = cerrar
+    ? (otros ? '' : 'Ahora mismo solo está este móvil en la lista: tu colega tendrá que pedirte permiso la próxima vez que abra la app. ')
+      + 'Si alguno borra los datos del navegador, tendrá que pedir permiso al otro. Si un día os quedáis los dos fuera, se abre desde Supabase (está explicado al final del setup.sql).'
+    : 'Volverá a poder entrar cualquiera que sepa el código de acceso.';
+  if (!await confirmar(texto, cerrar ? 'Cerrar la sala' : 'Abrir la sala', !cerrar)) return;
+  try {
+    await rpc('cerrar_sala', { p_sala: sala, p_llave: llave(), p_cerrar: cerrar });
+    accesoSala.cerrada = cerrar;
+    estado(cerrar ? 'Sala cerrada' : 'Sala abierta');
+  } catch { estado('No se pudo cambiar', true); }
+  pintarSala();
+};
+// En los móviles admitidos: avisar de las solicitudes para entrar
+const solicitudesVistas = new Set();
+async function revisarPendientes() {
+  if (!sala || sinLlaves || accesoSala.antigua || esperandoPermiso || !enElChat()) return;
+  let filas; try { filas = await listaMoviles(); } catch { return; }
+  accesoSala.cerrada = !!filas[0]?.cerrada;
+  const f = filas.find(x => x.estado === 'pendiente' && !solicitudesVistas.has(x.id));
+  if (!f || !$('#velo').classList.contains('oculto')) return;
+  solicitudesVistas.add(f.id);
+  const { titulo, detalle } = describirMovil(f);
+  navigator.vibrate?.([60, 40, 60]);
+  abrirHoja([
+    { texto: 'Permitir', accion: () => decidirMovil(f, true) },
+    { texto: 'Rechazar', peligro: true, accion: () => decidirMovil(f, false) }
+  ]);
+  const t = document.createElement('div');
+  t.style.cssText = 'padding:14px 16px;font-size:14px;color:var(--suave);text-align:center;line-height:1.45';
+  t.innerHTML = '<b style="color:var(--texto);font-size:16px">Un móvil quiere entrar en la sala</b><br>';
+  t.append(`«${titulo}» · ${detalle}. Permítelo solo si es tuyo o de tu colega.`);
+  $('#hojaBotones').prepend(t);
+}
+setInterval(revisarPendientes, 15000);
+
 /* ---------- Sesión y PIN ---------- */
 const leerSesion = () => { try { return JSON.parse(localStorage.getItem(ALMACEN) || 'null'); } catch { return null; } };
 const pinActivo = () => !!leerSesion()?.kc;
@@ -3975,6 +4158,7 @@ async function desbloquear() {
 
 function cerrarConversacion() {
   clearInterval(temporizador);
+  clearInterval(esperandoPermiso); esperandoPermiso = null; $('#esperaAcceso').classList.add('oculto');
   cerrarCamara(); cerrarVisor(); cerrarVideo(); cerrarBarraReac(); $('#novedades').classList.add('oculto'); cerrarPrep(); colaVideos.length = 0; cerrarHoja();
   if (editandoId !== null) terminarEdicion();
   terminarRespuesta(); ocultarNuevos(); salirSeleccion(); salirBusqueda();
@@ -4019,11 +4203,17 @@ async function entrarCon(crudo, salaId, nombre) {
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
   $('#entrada').classList.add('oculto'); $('#chat').classList.remove('oculto');
   await cargarBorrados();
-  arrancarSondeo();
-  if (ajustes.notif) suscribirse(false).catch(() => {});
   pintarBlindar();
   aplicarModoAdmin();
+  const acceso = await presentarme();
+  if (acceso.estado === 'pendiente') { esperarPermiso(); return; }
+  continuarEntrada();
+}
+function continuarEntrada() {
+  arrancarSondeo();
+  if (ajustes.notif) suscribirse(false).catch(() => {});
   setTimeout(revisarNovedades, 700);
+  setTimeout(revisarPendientes, 2500);
 }
 
 /* ---------- Entrada ---------- */
@@ -4242,6 +4432,8 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['7.3', ['Ajustes → Sala → «Sala cerrada»: si se activa, solo pueden entrar vuestros dos móviles. Uno nuevo, aunque sepa el código de acceso, tiene que pedir permiso, y en el otro móvil aparece un aviso para permitirlo o rechazarlo.',
+           'Si borras los datos del navegador con la sala cerrada, tu móvil contará como nuevo y tendrá que darte permiso el otro.']],
   ['6.8', ['Avisos más fiables: se entregan con prioridad alta aunque el móvil esté en reposo.',
            'Ajustes → Notificaciones → «Enviar un aviso de prueba a este móvil», para comprobar que te llegan con la pantalla apagada.']],
   ['6.7', ['El buscador de emojis (en reacciones y en el editor de fotos) ya busca por nombre en español: corazón, risa, fiesta, pulgar…']],
