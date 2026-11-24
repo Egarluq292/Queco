@@ -1489,7 +1489,7 @@ async function leer() {
     if (cambios) {
       rehacerSeparadores(); recalcularTemporal(); pintarVistos();
       if (seleccion) pintarSeleccion();
-      if (abajo || propio) { lista.scrollTop = lista.scrollHeight; ocultarNuevos(); }
+      if (abajo || propio || primeraCarga) { irAlFinal(); ocultarNuevos(); }
       else if (ajenosNuevos) { nuevosSinVer += ajenosNuevos; mostrarNuevos(); }
     }
     estado('Sincronizado');
@@ -3012,7 +3012,8 @@ function empezarEdicion(id) {
   editandoId = id;
   mostrarContexto(reg.m.k === 'foto' ? 'Editando el comentario de la foto' : 'Editando mensaje', previa(reg.m));
   $('#adjuntar').disabled = true;
-  $('#texto').value = reg.m.t || ''; ajustar(); $('#texto').focus();
+  mantenerVisible(id);
+  $('#texto').value = reg.m.t || ''; ajustar(); $('#texto').focus({ preventScroll: true });
 }
 function empezarRespuesta(id) {
   const reg = mensajes.get(id);
@@ -3020,8 +3021,54 @@ function empezarRespuesta(id) {
   if (editandoId !== null) terminarEdicion();
   respondiendoA = id;
   mostrarContexto('Respondiendo', previa(reg.m));
+  mantenerVisible(id);
   $('#texto').focus({ preventScroll: true });
 }
+/* ---------- Mantener a la vista el final (o el mensaje al que respondes) ----------
+   - Si estás abajo del todo, sigues abajo aunque carguen fotos, audios o reacciones.
+   - Si el hueco del chat encoge (teclado, barra de «Respondiendo»), lo que había abajo sigue a la vista.
+   - Al responder o editar, el mensaje elegido queda visible encima de la barra y del teclado. */
+const listaChat = $('#lista');
+let distFondo = 0, anclaAbajo = true, altoLista = 0, objetivoVisible = null, reanclaPendiente = false;
+listaChat.addEventListener('scroll', () => {
+  distFondo = Math.max(0, listaChat.scrollHeight - listaChat.scrollTop - listaChat.clientHeight);
+  anclaAbajo = distFondo < 60;
+}, { passive: true });
+function irAlFinal() { listaChat.scrollTop = listaChat.scrollHeight; distFondo = 0; anclaAbajo = true; }
+function reanclar() {
+  if (reanclaPendiente) return;
+  reanclaPendiente = true;
+  requestAnimationFrame(() => {
+    reanclaPendiente = false;
+    if (objetivoActivo()) asegurarObjetivo();
+    else if (anclaAbajo && listaChat.clientHeight) listaChat.scrollTop = listaChat.scrollHeight;
+  });
+}
+const objetivoActivo = () => objetivoVisible && Date.now() < objetivoVisible.hasta;
+function mantenerVisible(id) {
+  objetivoVisible = { id, hasta: Date.now() + 1800 };
+  asegurarObjetivo();
+  setTimeout(asegurarObjetivo, 350); setTimeout(asegurarObjetivo, 800);
+}
+function asegurarObjetivo() {
+  if (!objetivoActivo()) return;
+  const el = mensajes.get(objetivoVisible.id)?.el;
+  if (!el || !el.isConnected) return;
+  const r = el.getBoundingClientRect(), l = listaChat.getBoundingClientRect();
+  const arriba = l.top + ($('#abrirAjustes').getBoundingClientRect().bottom - l.top) + 8, abajo = l.bottom - 10;
+  if (r.bottom > abajo) listaChat.scrollTop += r.bottom - abajo;
+  else if (r.top < arriba) listaChat.scrollTop -= Math.min(arriba - r.top, abajo - r.bottom);
+}
+new ResizeObserver(() => {
+  const h = listaChat.clientHeight;
+  if (!h || h === altoLista) { altoLista = h; return; }
+  altoLista = h;
+  if (objetivoActivo()) asegurarObjetivo();
+  else listaChat.scrollTop = listaChat.scrollHeight - h - (anclaAbajo ? 0 : distFondo);
+}).observe(listaChat);
+new MutationObserver(reanclar).observe(listaChat, { childList: true, subtree: true });
+for (const ev of ['load', 'loadedmetadata']) listaChat.addEventListener(ev, reanclar, true);
+
 function cerrarContexto() { $('#barraContexto').classList.add('oculto'); }
 function terminarEdicion() {
   editandoId = null;
@@ -3509,7 +3556,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.3';
+const VERSION = '6.4';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4050,6 +4097,8 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['6.4', ['La conversación se abre directamente en el último mensaje.',
+           'Al abrir el teclado no se tapan los mensajes, y al responder o editar el mensaje elegido queda a la vista.']],
   ['6.3', ['El escudo del chat ahora activa y desactiva. Activado (con ✓): sin avisos, con PIN y portada de ajustes al abrir. Desactivado: con avisos, la app abre directa al chat y sin PIN. Si sale con un punto rojo, está a medias: un toque lo protege todo.',
            'Al desactivarlo pide confirmación; al volver a activarlo recupera tu PIN sin tener que escribirlo.']],
   ['6.2', ['Tus mensajes llevan un ✓ cuando se han enviado correctamente (tócalo para verlo). Solo indica que el envío fue bien: no dice si al otro le ha llegado ni si lo ha leído.']],
@@ -4089,7 +4138,7 @@ function mostrarChat() {
   $('#portada').classList.add('oculto');
   $('#chat').classList.remove('oculto');
   history.pushState({ chat: 1 }, '');
-  const l = $('#lista'); l.scrollTop = l.scrollHeight;
+  irAlFinal();
   informarVisto();
   setTimeout(revisarNovedades, 500);
 }
