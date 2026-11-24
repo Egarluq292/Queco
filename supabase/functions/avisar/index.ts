@@ -68,25 +68,35 @@ Deno.serve(async (req) => {
       if (error) throw error;
       if (accion === "probar") await new Promise((r) => setTimeout(r, 8000));
 
-      webpush.setVapidDetails("https://egarluq292.github.io", k.publica, k.privada);
+      // Apple rechaza muchas firmas si el «subject» no es un mailto: (BadJwtToken); con mailto: funciona en todos
+      webpush.setVapidDetails("mailto:avisos@egarluq292.github.io", k.publica, k.privada);
       let enviados = 0;
+      const errores: string[] = [];
+      const cuerpo = JSON.stringify({ t: "novedades" });
       await Promise.all((subs ?? []).map(async (s) => {
-        try {
-          await webpush.sendNotification(
-            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-            JSON.stringify({ t: "novedades" }),
-            // «high»: Android lo entrega al momento aunque el móvil esté en reposo; si no, puede retrasarlo mucho
-            { TTL: 86400, urgency: "high", topic: "novedades" },
-          );
-          enviados++;
-        } catch (e) {
-          const codigo = (e as { statusCode?: number }).statusCode;
-          if (codigo === 404 || codigo === 410) {
-            await db.from("suscripciones").delete().eq("endpoint", s.endpoint);
+        const destino = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
+        // «high»: se entrega al momento aunque el móvil esté en reposo
+        const intentos = [
+          { TTL: 86400, urgency: "high" as const, topic: "novedades" },
+          { TTL: 86400, urgency: "high" as const }, // por si el servicio no acepta «topic»
+        ];
+        for (const opciones of intentos) {
+          try {
+            await webpush.sendNotification(destino, cuerpo, opciones);
+            enviados++;
+            return;
+          } catch (e) {
+            const err = e as { statusCode?: number; body?: string };
+            if (err.statusCode === 404 || err.statusCode === 410) {
+              await db.from("suscripciones").delete().eq("endpoint", s.endpoint);
+              errores.push(`${err.statusCode} caducada`);
+              return;
+            }
+            errores.push(`${err.statusCode ?? "?"} ${(err.body ?? String(e)).slice(0, 120)} (${new URL(s.endpoint).host})`);
           }
         }
       }));
-      return respuesta({ ok: true, enviados, suscritos: (subs ?? []).length, version: 2 });
+      return respuesta({ ok: true, enviados, suscritos: (subs ?? []).length, errores, version: 3 });
     }
 
     return respuesta({ error: "acción desconocida" }, 400);

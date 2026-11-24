@@ -3613,7 +3613,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.8';
+const VERSION = '6.9';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3789,7 +3789,7 @@ $('#probarAvisos').onclick = async () => {
     const r = await funcionAvisar({ accion: 'probar', sala, disp });
     if (r?.error) throw new Error(r.error);
     if (!r?.suscritos) ayudaNotif('Este móvil no figura como suscrito. Desactiva y vuelve a activar los avisos.');
-    else if (!r.enviados) ayudaNotif('El servicio de avisos del móvil rechazó el envío. Desactiva y vuelve a activar los avisos.');
+    else if (!r.enviados) ayudaNotif('El servicio de avisos del móvil rechazó el envío' + (r.errores?.length ? ' (' + r.errores[0] + ')' : '') + (r.version >= 3 ? '.' : '. Falta actualizar la función «avisar» en Supabase.'));
     else ayudaNotif('Aviso entregado al servicio del móvil. Si no te ha llegado con la pantalla apagada, el problema está en el ahorro de batería del móvil.');
   } catch (e) {
     ayudaNotif(/desconocida|400/.test(String(e?.message)) ? 'Falta actualizar la función «avisar» en Supabase.' : 'No se pudo enviar la prueba: ' + (e?.message || 'error de conexión'));
