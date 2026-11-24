@@ -3622,7 +3622,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.1';
+const VERSION = '7.2';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3825,14 +3825,35 @@ $('#probarAvisos').onclick = async () => {
    7 toques seguidos en la línea «Versión … · dispositivo …» de Ajustes y escribir el código anterior.
    Solo se acepta un código que aparezca en mensajes de esta conversación. */
 let toquesVersion = [];
+// (esta línea está excluida del bloqueo de zoom por doble toque, para que cuenten todos los toques)
 $('#version').addEventListener('click', async () => {
   const ahora = Date.now();
-  toquesVersion = [...toquesVersion.filter(t => ahora - t < 3000), ahora];
+  toquesVersion = [...toquesVersion.filter(t => ahora - t < 4000), ahora];
   if (toquesVersion.length < 7) return;
   toquesVersion = [];
-  const codigo = prompt('Código del dispositivo anterior (lo que salía aquí, p. ej. 1a2b-3c4d):');
+  navigator.vibrate?.(30);
+  const codigo = await pedirCodigoDispositivo();
   if (codigo) await recuperarDispositivo(codigo);
 });
+function pedirCodigoDispositivo() {
+  return new Promise(res => {
+    const caja = document.createElement('div');
+    caja.style.cssText = 'padding:14px 16px 6px;display:grid;gap:10px;text-align:center';
+    const t = document.createElement('div');
+    t.style.cssText = 'font-size:13px;color:var(--suave)';
+    t.textContent = 'Escribe el código del dispositivo anterior (p. ej. 1a2b-3c4d). Tus mensajes antiguos volverán a salir como tuyos y la app se reiniciará.';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.autocomplete = 'off'; inp.setAttribute('autocapitalize', 'off'); inp.spellcheck = false;
+    inp.placeholder = 'xxxx-xxxx';
+    inp.style.cssText = 'font-size:18px;text-align:center;letter-spacing:.08em;padding:10px;border-radius:10px;border:1px solid var(--borde);background:var(--fondo);color:var(--texto)';
+    caja.append(t, inp);
+    abrirHoja([{ texto: 'Recuperar', peligro: false, accion: () => res(inp.value) }]);
+    $('#hojaBotones').prepend(caja);
+    const cancelar = () => { if (hojaReciente()) return; $('#hojaCancelar').removeEventListener('click', cancelar); res(null); };
+    $('#hojaCancelar').addEventListener('click', cancelar);
+    setTimeout(() => inp.focus(), 250);
+  });
+}
 async function recuperarDispositivo(codigo) {
   const corto = codigo.toLowerCase().replace(/[^0-9a-f]/g, '');
   if (corto.length !== 8) { estado('Ese código no es válido', true); return; }
@@ -3841,7 +3862,6 @@ async function recuperarDispositivo(codigo) {
   if (!anteriores.size) { estado('No hay mensajes de ese dispositivo en esta conversación', true); return; }
   const anterior = [...anteriores][0];
   if (anterior === disp) { estado('Este móvil ya es ese dispositivo'); return; }
-  if (!await confirmar(`Este móvil pasará a ser el dispositivo ${corto.slice(0, 4)}-${corto.slice(4)}: tus mensajes antiguos volverán a salir como tuyos. La app se reiniciará.`, 'Recuperar')) return;
   if (ajustes.notif) await desuscribirse().catch(() => {}); // los avisos se vuelven a activar con la identidad recuperada
   localStorage.setItem('susurro.disp', anterior);
   location.reload();
@@ -4309,7 +4329,7 @@ document.addEventListener('touchend', e => {
   const ahora = Date.now(), p = e.changedTouches[0] || { clientX: 0, clientY: 0 };
   const cerca = Math.hypot(p.clientX - ultimoToque.x, p.clientY - ultimoToque.y) < 30;
   // doble toque en el mismo sitio: evitar el zoom de la página (el visor de fotos tiene el suyo)
-  if (ahora - ultimoToque.t < 300 && cerca && !e.target.closest('input, textarea, button, label, #pTitulo, #visor, #chat.seleccionando')) e.preventDefault();
+  if (ahora - ultimoToque.t < 300 && cerca && !e.target.closest('input, textarea, button, label, #pTitulo, #version, #visor, #chat.seleccionando')) e.preventDefault();
   ultimoToque = { t: ahora, x: p.clientX, y: p.clientY };
 }, { passive: false });
 
