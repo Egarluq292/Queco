@@ -3613,7 +3613,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '6.9';
+const VERSION = '7.0';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3796,6 +3796,32 @@ $('#probarAvisos').onclick = async () => {
   }
   b.disabled = false;
 };
+
+/* Recuperar la identidad de este móvil (p. ej., tras borrar los datos de Chrome):
+   7 toques seguidos en la línea «Versión … · dispositivo …» de Ajustes y escribir el código anterior.
+   Solo se acepta un código que aparezca en mensajes de esta conversación. */
+let toquesVersion = [];
+$('#version').addEventListener('click', async () => {
+  const ahora = Date.now();
+  toquesVersion = [...toquesVersion.filter(t => ahora - t < 3000), ahora];
+  if (toquesVersion.length < 7) return;
+  toquesVersion = [];
+  const codigo = prompt('Código del dispositivo anterior (lo que salía aquí, p. ej. 1a2b-3c4d):');
+  if (codigo) await recuperarDispositivo(codigo);
+});
+async function recuperarDispositivo(codigo) {
+  const corto = codigo.toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (corto.length !== 8) { estado('Ese código no es válido', true); return; }
+  const anteriores = new Set();
+  for (const { m } of mensajes.values()) if (typeof m.d === 'string' && m.d.startsWith(corto)) anteriores.add(m.d);
+  if (!anteriores.size) { estado('No hay mensajes de ese dispositivo en esta conversación', true); return; }
+  const anterior = [...anteriores][0];
+  if (anterior === disp) { estado('Este móvil ya es ese dispositivo'); return; }
+  if (!await confirmar(`Este móvil pasará a ser el dispositivo ${corto.slice(0, 4)}-${corto.slice(4)}: tus mensajes antiguos volverán a salir como tuyos. La app se reiniciará.`, 'Recuperar')) return;
+  if (ajustes.notif) await desuscribirse().catch(() => {}); // los avisos se vuelven a activar con la identidad recuperada
+  localStorage.setItem('susurro.disp', anterior);
+  location.reload();
+}
 
 /* ---------- Sesión y PIN ---------- */
 const leerSesion = () => { try { return JSON.parse(localStorage.getItem(ALMACEN) || 'null'); } catch { return null; } };
