@@ -1443,22 +1443,84 @@ let bdLocal = null;
 function abrirBD() {
   if (bdLocal) return bdLocal;
   bdLocal = new Promise((res, rej) => {
-    const r = indexedDB.open('preferencias', 1);
-    r.onupgradeneeded = () => r.result.createObjectStore('borrados', { keyPath: ['sala', 'id'] });
+    const r = indexedDB.open('preferencias', 2);
+    r.onupgradeneeded = () => {
+      const db = r.result, hay = n => db.objectStoreNames.contains(n);
+      if (!hay('borrados')) db.createObjectStore('borrados', { keyPath: ['sala', 'id'] });
+      // Copia local cifrada de la conversación y de las fotos, para abrir al instante
+      if (!hay('filas')) db.createObjectStore('filas', { keyPath: ['sala', 'id'] });
+      if (!hay('meta')) db.createObjectStore('meta', { keyPath: 'sala' });
+      if (!hay('adjuntos')) db.createObjectStore('adjuntos', { keyPath: ['sala', 'id'] }).createIndex('t', 't');
+    };
     r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
+    r.onerror = () => { bdLocal = null; rej(r.error); };
   });
   return bdLocal;
 }
-async function bd(modo, fn) {
+async function bd(modo, fn, almacen = 'borrados') {
   const db = await abrirBD();
   return new Promise((res, rej) => {
-    const tx = db.transaction('borrados', modo);
-    const r = fn(tx.objectStore('borrados'));
+    const tx = db.transaction(almacen, modo);
+    const r = fn(tx.objectStore(almacen));
     tx.oncomplete = () => res(r?.result);
     tx.onerror = () => rej(tx.error);
   });
 }
+
+/* ---------- Copia local ----------
+   Lo que llega del servidor se guarda tal cual, cifrado, en este móvil. Al abrir se enseña al momento
+   y del servidor solo se piden los cambios. Se descarta si lleva más de 25 días sin sincronizar. */
+const CACHE_MAX_DIAS = 25, CACHE_MAX_ADJ = 250;
+const rangoSala = () => IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]);
+async function leerCopiaLocal() {
+  try {
+    const meta = await bd('readonly', st => st.get(sala), 'meta');
+    if (!meta) return null;
+    if (Date.now() - meta.t > CACHE_MAX_DIAS * 864e5) { await borrarCopiaLocal(); return null; }
+    const filas = await bd('readonly', st => st.getAll(rangoSala()), 'filas') || [];
+    filas.sort((a, b) => a.version - b.version);
+    return { filas, version: meta.v };
+  } catch { return null; }
+}
+function guardarCopiaLocal(filas, version) {
+  const salaAhora = sala;
+  if (!salaAhora) return;
+  abrirBD().then(db => {
+    const tx = db.transaction(['filas', 'meta'], 'readwrite');
+    const st = tx.objectStore('filas');
+    for (const f of filas) {
+      if (f.datos) st.put({ sala: salaAhora, id: f.id, version: f.version, datos: f.datos });
+      else st.delete([salaAhora, f.id]); // borrado, caducado o vaciado: fuera también de aquí
+    }
+    tx.objectStore('meta').put({ sala: salaAhora, v: version, t: Date.now() });
+  }).catch(() => {});
+}
+async function borrarCopiaLocal() {
+  for (const a of ['filas', 'adjuntos', 'meta']) {
+    try { await bd('readwrite', st => st.delete(a === 'meta' ? sala : rangoSala()), a); } catch {}
+  }
+}
+async function adjuntoLocal(id) {
+  try { return (await bd('readonly', st => st.get([sala, id]), 'adjuntos'))?.b64 || null; } catch { return null; }
+}
+let adjGuardadosDesdeLimpieza = 0;
+function guardarAdjuntoLocal(id, b64) {
+  const salaAhora = sala;
+  bd('readwrite', st => st.put({ sala: salaAhora, id, b64, t: Date.now() }), 'adjuntos').then(() => {
+    if (++adjGuardadosDesdeLimpieza < 20) return;
+    adjGuardadosDesdeLimpieza = 0;
+    // Como mucho CACHE_MAX_ADJ archivos: se quitan los más antiguos
+    return bd('readwrite', st => {
+      const c = st.count();
+      c.onsuccess = () => {
+        let sobran = c.result - CACHE_MAX_ADJ;
+        if (sobran <= 0) return;
+        st.index('t').openCursor().onsuccess = e => { const cur = e.target.result; if (cur && sobran-- > 0) { cur.delete(); cur.continue(); } };
+      };
+    }, 'adjuntos');
+  }).catch(() => {});
+}
+const quitarAdjuntoLocal = id => bd('readwrite', st => st.delete([sala, id]), 'adjuntos').catch(() => {});
 const guardarBorrado = reg => bd('readwrite', s => s.put(reg)).catch(() => {});
 const quitarBorrado = id => bd('readwrite', s => s.delete([sala, id])).catch(() => {});
 const vaciarBorrados = () => bd('readwrite', s => s.delete(IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]))).catch(() => {});
@@ -1513,8 +1575,8 @@ async function leer() {
     let filas, cambios = false, propio = false, ajenosNuevos = 0;
     const primeraCarga = ultimaVersion === 0;
     if (primeraCarga) listaChat.classList.add('preparando');
-    do {
-      filas = await rpc('leer', { p_sala: sala, p_desde: ultimaVersion });
+    const salaLeida = sala;
+    const procesar = async filas => {
       for (const f of filas) {
         ultimaVersion = Math.max(ultimaVersion, f.version);
         let m = null;
@@ -1549,6 +1611,25 @@ async function leer() {
         else if (esNuevo && primeraCarga === false) ajenosNuevos++;
         if (esNuevo && m && m.d !== disp) $('#escribiendoInd')?.remove();
       }
+    };
+    if (primeraCarga) {
+      // Primero lo que ya hay en el móvil (al instante); después, solo lo nuevo del servidor
+      const copia = await leerCopiaLocal();
+      if (copia && sala === salaLeida) {
+        await procesar(copia.filas);
+        ultimaVersion = Math.max(ultimaVersion, copia.version || 0);
+        if (cambios) { rehacerSeparadores(); recalcularTemporal(); pintarVistos(); irAlFinal(); }
+        revelarLista(250);
+      }
+    }
+    do {
+      filas = await rpc('leer', { p_sala: sala, p_desde: ultimaVersion });
+      if (sala !== salaLeida) break;
+      // Lo borrado o caducado también sale de la copia local de fotos
+      for (const f of filas) if (!f.datos) { const m = mensajes.get(f.id)?.m; for (const a of [m?.a, m?.po]) if (a) quitarAdjuntoLocal(a); }
+      await procesar(filas);
+      if (filas.length) guardarCopiaLocal(filas, ultimaVersion);
+      else if (primeraCarga) guardarCopiaLocal([], ultimaVersion); // marca de sincronizado
     } while (filas.length === 200);
     if (cambios) {
       rehacerSeparadores(); recalcularTemporal(); pintarVistos();
@@ -1655,7 +1736,8 @@ const adjGuardados = new Map(); // id → base64 cifrado de adjuntos de mensajes
 function cargarAdjunto(id, mime) {
   if (!cacheAdj.has(id)) cacheAdj.set(id, (async () => {
     try {
-      const b64 = adjGuardados.get(id) || await rpc('bajar', { p_sala: sala, p_id: id });
+      let b64 = adjGuardados.get(id) || await adjuntoLocal(id);
+      if (!b64) { b64 = await rpc('bajar', { p_sala: sala, p_id: id }); if (b64) guardarAdjuntoLocal(id, b64); }
       if (!b64) return null;
       const u = await descifrarBytes(deB64(b64), ':adj');
       if (!u) return null;
@@ -3673,7 +3755,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.5';
+const VERSION = '7.6';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -3804,6 +3886,7 @@ $('#vaciarBtn').onclick = async () => {
     const t = temporal;
     await rpc('vaciar', { p_sala: sala });
     await vaciarBorrados();
+    await borrarCopiaLocal();
     await leer();
     if (t) { await enviarMensaje({ k: 'ajuste', v: t }); await leer(); }
     $('#ajustes').classList.add('oculto');
@@ -4211,8 +4294,8 @@ async function entrarCon(crudo, salaId, nombre) {
   await cargarBorrados();
   pintarBlindar();
   aplicarModoAdmin();
-  const acceso = await presentarme();
-  if (acceso.estado === 'pendiente') { esperarPermiso(); return; }
+  // Presentarse a la sala va en paralelo; si resulta estar cerrada para este móvil, se pasa a esperar permiso
+  presentarme().then(a => { if (a.estado === 'pendiente') esperarPermiso(); });
   continuarEntrada();
 }
 function continuarEntrada() {
@@ -4251,6 +4334,7 @@ $('#salir').onclick = async () => {
   await desuscribirse();
   ajustes.notif = false; guardarAjustes();
   localStorage.removeItem(ALMACEN);
+  await borrarCopiaLocal();
   cerrarConversacion();
   mostrarPortada();
 };
@@ -4438,6 +4522,7 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['7.6', ['La conversación y las fotos se abren mucho más rápido: el móvil guarda una copia cifrada y solo descarga lo nuevo.']],
   ['7.3', ['Ajustes → Sala → «Sala cerrada»: si se activa, solo pueden entrar vuestros dos móviles. Uno nuevo, aunque sepa el código de acceso, tiene que pedir permiso, y en el otro móvil aparece un aviso para permitirlo o rechazarlo.',
            'Si borras los datos del navegador con la sala cerrada, tu móvil contará como nuevo y tendrá que darte permiso el otro.']],
   ['6.8', ['Avisos más fiables: se entregan con prioridad alta aunque el móvil esté en reposo.',
