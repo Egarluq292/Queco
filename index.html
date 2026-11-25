@@ -1271,7 +1271,7 @@ function crearElemento(id, m) {
     b.classList.add('con-foto');
     const img = document.createElement('img'); img.className = 'foto'; img.alt = m.k === 'gif' ? 'GIF' : 'Foto'; img.draggable = false;
     if (m.w && m.h) { img.width = m.w; img.height = m.h; }
-    cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; else img.alt = 'Foto no disponible'; });
+    cargarAlVer(img, () => cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; else img.alt = 'Foto no disponible'; }));
     b.append(img);
     if (m.t) { const pie = document.createElement('div'); pie.className = 'pie'; pie.append(realzarEmojis(formatear(m.t))); b.append(pie); }
   } else if (m.k === 'video') {
@@ -1279,17 +1279,17 @@ function crearElemento(id, m) {
     const caja = document.createElement('div'); caja.className = 'videoMini';
     const img = document.createElement('img'); img.className = 'foto'; img.alt = 'Vídeo'; img.draggable = false;
     if (m.w && m.h) { img.width = m.w; img.height = m.h; }
-    if (m.po) cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; });
+    if (m.po) cargarAlVer(img, () => cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; }));
     const play = document.createElement('span'); play.className = 'play'; play.innerHTML = PLAY_SVG;
     const dur = document.createElement('span'); dur.className = 'durVideo'; dur.textContent = '🎬 ' + fmtDur(m.s);
     caja.append(img, play, dur); b.append(caja);
   } else if (m.k === 'audio') {
     const c = document.createElement('div'); c.className = 'cargando'; c.textContent = 'Cargando audio…';
     b.append(c);
-    cargarAdjunto(m.a, m.m).then(r => {
+    cargarAlVer(c, () => cargarAdjunto(m.a, m.m).then(r => {
       if (!r) { c.textContent = 'Audio no disponible'; return; }
       c.replaceWith(crearReproductor(r.url, m.s));
-    });
+    }));
   } else {
     const t = document.createElement('div'); t.className = 'texto';
     const n = soloEmojis(m.t);
@@ -1443,14 +1443,27 @@ let bdLocal = null;
 function abrirBD() {
   if (bdLocal) return bdLocal;
   bdLocal = new Promise((res, rej) => {
-    const r = indexedDB.open('preferencias', 2);
-    r.onupgradeneeded = () => {
+    const r = indexedDB.open('preferencias', 3);
+    r.onupgradeneeded = e => {
       const db = r.result, hay = n => db.objectStoreNames.contains(n);
       if (!hay('borrados')) db.createObjectStore('borrados', { keyPath: ['sala', 'id'] });
-      // Copia local cifrada de la conversación y de las fotos, para abrir al instante
+      // Copia local cifrada de la conversación y de los adjuntos, para abrir al instante y no volver a descargarlos
       if (!hay('filas')) db.createObjectStore('filas', { keyPath: ['sala', 'id'] });
       if (!hay('meta')) db.createObjectStore('meta', { keyPath: 'sala' });
       if (!hay('adjuntos')) db.createObjectStore('adjuntos', { keyPath: ['sala', 'id'] }).createIndex('t', 't');
+      // Índice ligero (tamaño y último uso) para mantener la copia de adjuntos por debajo de 300 MB
+      if (!hay('adjIndice')) {
+        db.createObjectStore('adjIndice', { keyPath: ['sala', 'id'] }).createIndex('t', 't');
+        if (e.oldVersion >= 2) {
+          const tx = r.transaction, ind = tx.objectStore('adjIndice');
+          tx.objectStore('adjuntos').openCursor().onsuccess = ev => {
+            const c = ev.target.result; if (!c) return;
+            const v = c.value;
+            ind.put({ sala: v.sala, id: v.id, t: v.t || Date.now(), n: v.u ? v.u.byteLength : Math.round((v.b64 || '').length * .75) });
+            c.continue();
+          };
+        }
+      }
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => { bdLocal = null; rej(r.error); };
@@ -1470,7 +1483,7 @@ async function bd(modo, fn, almacen = 'borrados') {
 /* ---------- Copia local ----------
    Lo que llega del servidor se guarda tal cual, cifrado, en este móvil. Al abrir se enseña al momento
    y del servidor solo se piden los cambios. Se descarta si lleva más de 25 días sin sincronizar. */
-const CACHE_MAX_DIAS = 25, CACHE_MAX_ADJ = 250;
+const CACHE_MAX_DIAS = 25;
 const rangoSala = () => IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]);
 async function leerCopiaLocal() {
   try {
@@ -1496,31 +1509,49 @@ function guardarCopiaLocal(filas, version) {
   }).catch(() => {});
 }
 async function borrarCopiaLocal() {
-  for (const a of ['filas', 'adjuntos', 'meta']) {
+  for (const a of ['filas', 'adjuntos', 'adjIndice', 'meta']) {
     try { await bd('readwrite', st => st.delete(a === 'meta' ? sala : rangoSala()), a); } catch {}
   }
 }
+const CACHE_MAX_BYTES = 300 * 1048576, CACHE_OBJETIVO = 280 * 1048576;
+// Devuelve los bytes cifrados del adjunto si están en el móvil, y apunta que se acaba de usar
 async function adjuntoLocal(id) {
-  try { return (await bd('readonly', st => st.get([sala, id]), 'adjuntos'))?.b64 || null; } catch { return null; }
+  try {
+    const v = await bd('readonly', st => st.get([sala, id]), 'adjuntos');
+    if (!v) return null;
+    const u = v.u ? new Uint8Array(v.u) : v.b64 ? deB64(v.b64) : null;
+    if (u) bd('readwrite', st => st.put({ sala, id, t: Date.now(), n: u.byteLength }), 'adjIndice').catch(() => {});
+    return u;
+  } catch { return null; }
 }
 let adjGuardadosDesdeLimpieza = 0;
-function guardarAdjuntoLocal(id, b64) {
+function guardarAdjuntoLocal(id, u) {
   const salaAhora = sala;
-  bd('readwrite', st => st.put({ sala: salaAhora, id, b64, t: Date.now() }), 'adjuntos').then(() => {
-    if (++adjGuardadosDesdeLimpieza < 20) return;
-    adjGuardadosDesdeLimpieza = 0;
-    // Como mucho CACHE_MAX_ADJ archivos: se quitan los más antiguos
-    return bd('readwrite', st => {
-      const c = st.count();
-      c.onsuccess = () => {
-        let sobran = c.result - CACHE_MAX_ADJ;
-        if (sobran <= 0) return;
-        st.index('t').openCursor().onsuccess = e => { const cur = e.target.result; if (cur && sobran-- > 0) { cur.delete(); cur.continue(); } };
-      };
-    }, 'adjuntos');
-  }).catch(() => {});
+  abrirBD().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(['adjuntos', 'adjIndice'], 'readwrite');
+    tx.objectStore('adjuntos').put({ sala: salaAhora, id, u, t: Date.now() });
+    tx.objectStore('adjIndice').put({ sala: salaAhora, id, t: Date.now(), n: u.byteLength });
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  })).then(() => { if (++adjGuardadosDesdeLimpieza >= 10) { adjGuardadosDesdeLimpieza = 0; return limpiarAdjuntosLocales(); } }).catch(() => {});
 }
-const quitarAdjuntoLocal = id => bd('readwrite', st => st.delete([sala, id]), 'adjuntos').catch(() => {});
+// Si la copia pasa de 300 MB, se borran primero los adjuntos que llevan más tiempo sin abrirse
+async function limpiarAdjuntosLocales() {
+  const db = await abrirBD();
+  const indice = await new Promise(res => { const q = db.transaction('adjIndice').objectStore('adjIndice').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+  let total = indice.reduce((a, x) => a + (x.n || 0), 0);
+  if (total <= CACHE_MAX_BYTES) return;
+  indice.sort((a, b) => a.t - b.t);
+  const tx = db.transaction(['adjuntos', 'adjIndice'], 'readwrite');
+  for (const x of indice) {
+    if (total <= CACHE_OBJETIVO) break;
+    tx.objectStore('adjuntos').delete([x.sala, x.id]); tx.objectStore('adjIndice').delete([x.sala, x.id]);
+    total -= x.n || 0;
+  }
+}
+const quitarAdjuntoLocal = id => abrirBD().then(db => {
+  const tx = db.transaction(['adjuntos', 'adjIndice'], 'readwrite');
+  tx.objectStore('adjuntos').delete([sala, id]); tx.objectStore('adjIndice').delete([sala, id]);
+}).catch(() => {});
 const guardarBorrado = reg => bd('readwrite', s => s.put(reg)).catch(() => {});
 const quitarBorrado = id => bd('readwrite', s => s.delete([sala, id])).catch(() => {});
 const vaciarBorrados = () => bd('readwrite', s => s.delete(IDBKeyRange.bound([sala, -Infinity], [sala, Infinity]))).catch(() => {});
@@ -1634,6 +1665,7 @@ async function leer() {
     if (cambios) {
       rehacerSeparadores(); recalcularTemporal(); pintarVistos();
       if (seleccion) pintarSeleccion();
+      if (propio || ajenosNuevos) marcarActividad();
       if (abajo || propio || primeraCarga) { irAlFinal(); ocultarNuevos(); }
       else if (ajenosNuevos) { nuevosSinVer += ajenosNuevos; mostrarNuevos(); }
     }
@@ -1698,6 +1730,7 @@ async function comprobarEscribiendo() {
     if (presenciaAntigua) throw new Error('antigua');
     const [p] = await rpc('presencia_otro', { p_sala: sala, p_disp: disp });
     mostrarEscribiendo(!!p?.escribiendo);
+    if (p?.escribiendo) marcarActividad();
     const e = $('#estadoOtro');
     if (p?.ultima) {
       const enLinea = new Date(p.ahora) - new Date(p.ultima) < 25000;
@@ -1724,25 +1757,94 @@ function mostrarEscribiendo(si) {
   if (abajo) lista.scrollTop = lista.scrollHeight;
 }
 
-function arrancarSondeo() {
-  clearInterval(temporizador);
-  if (esperandoPermiso) return;
-  if (document.visibilityState === 'visible' && clave) { leer(); temporizador = setInterval(leer, INTERVALO); }
+/* Consultas periódicas: solo con la app a la vista y fuera de la portada.
+   Cada 2 s si ha habido actividad en el último minuto (mensajes, toques, escribir); si no, cada 10 s. */
+const INTERVALO_REPOSO = 10000, ACTIVIDAD_MS = 60000;
+let ultimaActividad = Date.now();
+const sondeoPermitido = () => !!clave && !esperandoPermiso && document.visibilityState === 'visible' && $('#portada').classList.contains('oculto');
+function marcarActividad() {
+  const estabaEnReposo = Date.now() - ultimaActividad >= ACTIVIDAD_MS;
+  ultimaActividad = Date.now();
+  if (estabaEnReposo && sondeoPermitido()) programarSondeo(true);
+}
+function programarSondeo(yaMismo = false) {
+  clearTimeout(temporizador);
+  if (!sondeoPermitido()) return;
+  const espera = yaMismo ? 0 : Date.now() - ultimaActividad < ACTIVIDAD_MS ? INTERVALO : INTERVALO_REPOSO;
+  temporizador = setTimeout(async () => { await leer(); programarSondeo(); }, espera);
+}
+function pararSondeo() { clearTimeout(temporizador); }
+function arrancarSondeo() { programarSondeo(true); }
+for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, () => { if (clave) marcarActividad(); }, { passive: true, capture: true });
+
+/* ---------- Carga perezosa ----------
+   Los adjuntos solo se descargan cuando su mensaje está en pantalla o cerca (600 px), nunca el historial entero. */
+const observadoresCarga = new Map(), pendientesCarga = new Map(); // raíz → IntersectionObserver; elemento → función
+function cargarAlVer(el, fn, raiz = listaChat) {
+  if (typeof IntersectionObserver === 'undefined') { fn(); return; }
+  let io = observadoresCarga.get(raiz);
+  if (!io) {
+    io = new IntersectionObserver(entradas => {
+      for (const e of entradas) {
+        if (!e.isIntersecting) continue;
+        if (raiz === listaChat && listaChat.classList.contains('preparando')) continue; // aún sin colocar al final
+        const f = pendientesCarga.get(e.target);
+        io.unobserve(e.target); pendientesCarga.delete(e.target);
+        f?.();
+      }
+    }, { root: raiz, rootMargin: '600px 0px' });
+    observadoresCarga.set(raiz, io);
+  }
+  pendientesCarga.set(el, fn);
+  io.observe(el);
+}
+// Al enseñar la conversación ya colocada, se vuelven a mirar los pendientes
+function reevaluarCargas() {
+  const io = observadoresCarga.get(listaChat); if (!io) return;
+  for (const el of pendientesCarga.keys()) if (listaChat.contains(el)) { io.unobserve(el); io.observe(el); }
+}
+function olvidarCargas() {
+  for (const io of observadoresCarga.values()) io.disconnect();
+  observadoresCarga.clear(); pendientesCarga.clear();
 }
 
 /* ---------- Adjuntos ---------- */
 const cacheAdj = new Map(); // id → Promise<{url, blob, b64}|null>
 const adjGuardados = new Map(); // id → base64 cifrado de adjuntos de mensajes conservados
+/* Descarga de un adjunto cifrado: en binario (sin el ~37 % extra del base64 y el JSON).
+   Si el servidor aún no tiene «bajar_bin» o no devuelve binario, se vuelve solo al método antiguo. */
+let binarioNo = false;
+async function bajarCifrado(id) {
+  if (!binarioNo) {
+    const cuerpo = { p_sala: sala, p_id: id };
+    if (!sinLlaves) cuerpo.p_llave = llave();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bajar_bin`, {
+      method: 'POST', headers: { ...cabeceras(), Accept: 'application/octet-stream' }, body: JSON.stringify(cuerpo),
+      cache: 'no-store', referrerPolicy: 'no-referrer'
+    });
+    if (r.ok && /octet-stream/i.test(r.headers.get('content-type') || '')) {
+      const u = new Uint8Array(await r.arrayBuffer());
+      return u.byteLength ? u : null;
+    }
+    const t = r.ok ? '' : await r.text().catch(() => '');
+    if (/sala cerrada/.test(t)) { sinAccesoASala(); throw new Error('sala cerrada'); }
+    if (r.ok || [404, 406, 415].includes(r.status) || /PGRST/.test(t)) binarioNo = true; // sin soporte: método antiguo
+    else throw new Error('bajar_bin ' + r.status);
+  }
+  const b64 = await rpc('bajar', { p_sala: sala, p_id: id });
+  return b64 ? deB64(b64) : null;
+}
 function cargarAdjunto(id, mime) {
   if (!cacheAdj.has(id)) cacheAdj.set(id, (async () => {
     try {
-      let b64 = adjGuardados.get(id) || await adjuntoLocal(id);
-      if (!b64) { b64 = await rpc('bajar', { p_sala: sala, p_id: id }); if (b64) guardarAdjuntoLocal(id, b64); }
-      if (!b64) return null;
-      const u = await descifrarBytes(deB64(b64), ':adj');
+      const g = adjGuardados.get(id);
+      let cif = g ? deB64(g) : await adjuntoLocal(id);
+      if (!cif) { cif = await bajarCifrado(id); if (cif) guardarAdjuntoLocal(id, cif); }
+      if (!cif) return null;
+      const u = await descifrarBytes(cif, ':adj');
       if (!u) return null;
       const blob = new Blob([u], { type: mime || '' });
-      return { url: URL.createObjectURL(blob), blob, b64 };
+      return { url: URL.createObjectURL(blob), blob, get b64() { return aB64(cif); } };
     } catch { cacheAdj.delete(id); return null; }
   })());
   return cacheAdj.get(id);
@@ -1855,14 +1957,14 @@ async function reducirFoto(file) {
 /* Reduce la foto y elimina sus metadatos (incluida la ubicación GPS) */
 async function aJpeg(fuente, ancho, alto) {
   let res = null;
-  for (const [max, q] of [[1600, .8], [1280, .7], [1024, .6]]) {
+  for (const [max, q] of [[1280, .75], [1024, .65], [800, .55]]) {
     const s = Math.min(1, max / Math.max(ancho, alto));
     const c = document.createElement('canvas');
     c.width = Math.round(ancho * s); c.height = Math.round(alto * s);
     c.getContext('2d').drawImage(fuente, 0, 0, c.width, c.height);
     const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
     res = { blob, w: c.width, h: c.height };
-    if (blob.size <= 600000) break;
+    if (blob.size <= 450000) break;
   }
   return res;
 }
@@ -2559,7 +2661,7 @@ function pintarGaleria() {
     if (m.k === 'video') {
       const b = document.createElement('div'); b.className = 'galCelda'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Vídeo'); b.dataset.id = id;
       const img = document.createElement('img'); img.alt = '';
-      if (m.po) cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; });
+      if (m.po) cargarAlVer(b, () => cargarAdjunto(m.po, 'image/jpeg').then(r => { if (r) img.src = r.url; }), cuerpo);
       const play = document.createElement('span'); play.className = 'play'; play.innerHTML = PLAY_SVG;
       const dur = document.createElement('span'); dur.className = 'durVideo'; dur.textContent = fmtDur(m.s);
       b.append(img, play, dur); b.onclick = () => abrirVideo(id);
@@ -2567,7 +2669,7 @@ function pintarGaleria() {
     } else if (tipo === 'foto') {
       const b = document.createElement('div'); b.className = 'galCelda'; b.setAttribute('role', 'button'); b.setAttribute('aria-label', 'Foto'); b.dataset.id = id;
       const img = document.createElement('img'); img.alt = '';
-      cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; });
+      cargarAlVer(b, () => cargarAdjunto(m.a, m.m).then(r => { if (r) img.src = r.url; }), cuerpo);
       b.append(img); b.onclick = () => abrirVisor(id);
       rejilla.append(b);
     } else {
@@ -2576,10 +2678,10 @@ function pintarGaleria() {
       const f = new Date(m.ts);
       s.textContent = `${m.d === disp ? 'Tú' : 'Recibido'} · ${f.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}, ${fmtHora(m.ts)}${m.s ? ' · ' + Math.floor(m.s / 60) + ':' + String(m.s % 60).padStart(2, '0') : ''}`;
       c.append(s);
-      cargarAdjunto(m.a, m.m).then(r => {
+      cargarAlVer(c, () => cargarAdjunto(m.a, m.m).then(r => {
         if (!r) return;
         c.append(crearReproductor(r.url, m.s));
-      });
+      }), cuerpo);
       cuerpo.append(c);
     }
   }
@@ -2808,7 +2910,8 @@ async function comprimirVideo(v, duracion, alProgreso, senal) {
   const tipo = tipoGrabacionVideo();
   const lienzoOk = typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.captureStream;
   if (!tipo || !lienzoOk) return null;
-  const k = Math.min(1, 1280 / Math.max(v.videoWidth, v.videoHeight));
+  // 540p: el lado corto a 540 px como mucho (y el largo a 960)
+  const k = Math.min(1, 960 / Math.max(v.videoWidth, v.videoHeight), 540 / Math.min(v.videoWidth, v.videoHeight));
   const W = Math.round(v.videoWidth * k / 2) * 2, H = Math.round(v.videoHeight * k / 2) * 2;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
@@ -2821,7 +2924,7 @@ async function comprimirVideo(v, duracion, alProgreso, senal) {
     fuente.connect(destino); // al grabador, no a los altavoces: se comprime en silencio
     pistas.push(...destino.stream.getAudioTracks());
   } catch { v.muted = true; }
-  const grabador = new MediaRecorder(new MediaStream(pistas), { mimeType: tipo, videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 });
+  const grabador = new MediaRecorder(new MediaStream(pistas), { mimeType: tipo, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 });
   const trozos = [];
   grabador.ondataavailable = e => { if (e.data && e.data.size) trozos.push(e.data); };
   const parado = new Promise(r => { grabador.onstop = r; });
@@ -2874,17 +2977,18 @@ function cargarVideo(m, alProgreso) {
       const trabajador = async () => {
         while (siguiente < ids.length) {
           const i = siguiente++;
-          const b64 = (Array.isArray(guardado) && guardado[i]) || await rpc('bajar', { p_sala: sala, p_id: ids[i] });
-          if (!b64) throw new Error('falta');
-          const u = await descifrarBytes(deB64(b64), ':adj');
+          const g = Array.isArray(guardado) && guardado[i];
+          const cif = g ? deB64(g) : await bajarCifrado(ids[i]);
+          if (!cif) throw new Error('falta');
+          const u = await descifrarBytes(cif, ':adj');
           if (!u) throw new Error('clave');
-          res[i] = { u, b64 };
+          res[i] = { u, cif };
           alProgreso?.(++hechos / ids.length);
         }
       };
       await Promise.all([trabajador(), trabajador(), trabajador(), trabajador()]);
       const blob = new Blob(res.map(r => r.u), { type: m.m || 'video/mp4' });
-      return { url: URL.createObjectURL(blob), blob, b64: res.map(r => r.b64) };
+      return { url: URL.createObjectURL(blob), blob, get b64() { return res.map(r => aB64(r.cif)); } };
     } catch { cacheAdj.delete(id); return null; }
   })());
   return cacheAdj.get(id);
@@ -2919,7 +3023,10 @@ async function siguienteVideo() {
     $('#prepVideoInfo').textContent = `Dura ${fmtDur(d)}. El máximo es ${fmtDur(VIDEO_MAX_S)}: recórtalo en la galería del móvil y vuelve a intentarlo.`;
     return;
   }
-  prepActual.directo = file.size <= VIDEO_DIRECTO && /^video\/mp4/.test(file.type);
+  // Tal cual solo si ya es un mp4 ligero (≤ 540p y ≤ ~0,9 Mbit/s); si no, se comprime
+  const kbps = prepActual.duracion ? file.size * 8 / prepActual.duracion / 1000 : Infinity;
+  prepActual.directo = file.size <= VIDEO_DIRECTO && /^video\/mp4/.test(file.type) && kbps <= 900
+    && Math.min(v.videoWidth, v.videoHeight) <= 560;
   if (!prepActual.directo && !tipoGrabacionVideo() && file.size > 25 * 1048576) {
     $('#prepVideoInfo').textContent = 'Este móvil no puede comprimir vídeos y este es demasiado grande para enviarlo tal cual.';
     return;
@@ -3192,7 +3299,7 @@ async function revelarLista(maximo) {
   ultimoCambioLista = Date.now();
   while (Date.now() - ultimoCambioLista < 220 && Date.now() < fin) await new Promise(r => setTimeout(r, 40));
   irAlFinal();
-  requestAnimationFrame(() => { irAlFinal(); listaChat.classList.remove('preparando'); revelando = false; });
+  requestAnimationFrame(() => { irAlFinal(); listaChat.classList.remove('preparando'); revelando = false; reevaluarCargas(); });
 }
 function reanclar() {
   ultimoCambioLista = Date.now();
@@ -3755,7 +3862,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.6';
+const VERSION = '7.7';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4118,7 +4225,7 @@ $('#intCerrada').onchange = async e => {
 // En los móviles admitidos: avisar de las solicitudes para entrar
 const solicitudesVistas = new Set();
 async function revisarPendientes() {
-  if (!sala || sinLlaves || accesoSala.antigua || esperandoPermiso || !enElChat()) return;
+  if (!sala || sinLlaves || accesoSala.antigua || esperandoPermiso || !enElChat() || !accesoSala.cerrada) return;
   let filas; try { filas = await listaMoviles(); } catch { return; }
   accesoSala.cerrada = !!filas[0]?.cerrada;
   const f = filas.find(x => x.estado === 'pendiente' && !solicitudesVistas.has(x.id));
@@ -4136,7 +4243,7 @@ async function revisarPendientes() {
   t.append(`${detalle}. Permítelo solo si es tuyo o de tu colega.`);
   $('#hojaBotones').prepend(t);
 }
-setInterval(revisarPendientes, 15000);
+setInterval(revisarPendientes, 60000);
 
 /* ---------- Sesión y PIN ---------- */
 const leerSesion = () => { try { return JSON.parse(localStorage.getItem(ALMACEN) || 'null'); } catch { return null; } };
@@ -4267,6 +4374,7 @@ let ocultoDesde = 0, selectorAbierto = false, estabaEnChat = false;
 const VUELTA_RAPIDA = 60000; // si vuelves antes de 1 minuto, entras directamente
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    pararSondeo();
     ocultoDesde = Date.now();
     estabaEnChat = !!clave && $('#portada').classList.contains('oculto') && $('#entrada').classList.contains('oculto');
     if (!selectorAbierto && ajustes.portada) mostrarPortada();
@@ -4283,7 +4391,7 @@ document.addEventListener('visibilitychange', () => {
 
 async function entrarCon(crudo, salaId, nombre) {
   await adminListo;
-  limpiarCache(); mensajes.clear(); reacciones.clear();
+  limpiarCache(); olvidarCargas(); mensajes.clear(); reacciones.clear();
   vistoHasta = 0; miVisto = { id: 0, u: 0 };
   crudoActual = crudo;
   clave = await importarClave(crudo); sala = salaId; yo = nombre;
@@ -4299,7 +4407,7 @@ async function entrarCon(crudo, salaId, nombre) {
   continuarEntrada();
 }
 function continuarEntrada() {
-  arrancarSondeo();
+  marcarActividad(); arrancarSondeo();
   if (ajustes.notif) suscribirse(false).catch(() => {});
   setTimeout(revisarNovedades, 700);
   setTimeout(revisarPendientes, 2500);
@@ -4508,6 +4616,7 @@ $('#pTitulo').addEventListener('click', () => {
 });
 
 function mostrarPortada() {
+  pararSondeo();
   setTimeout(aplicarActualizacion, 300);
   salirSeleccion(); salirBusqueda();
   audioSonando?.pause();
@@ -4569,6 +4678,7 @@ $('#novedadesCerrar').onclick = () => {
 function mostrarChat() {
   $('#portada').classList.add('oculto');
   $('#chat').classList.remove('oculto');
+  marcarActividad(); arrancarSondeo();
   history.pushState({ chat: 1 }, '');
   listaChat.classList.add('preparando');
   irAlFinal();

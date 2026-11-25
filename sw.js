@@ -2,7 +2,7 @@
 // Guarda solo la propia app (no los mensajes) para poder abrirla sin red,
 // y muestra los avisos de mensajes nuevos. Siempre intenta la red primero,
 // así las actualizaciones llegan solas.
-const CACHE = 'susurro-v65';
+const CACHE = 'susurro-v66';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icono-192.png', './icono-512.png'];
 const ES_IOS = /iPhone|iPad|iPod/.test(self.navigator.userAgent);
 

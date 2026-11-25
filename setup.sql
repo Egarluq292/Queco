@@ -1,4 +1,4 @@
--- Preferencias · configuración de Supabase (versión 4)
+-- Preferencias · configuración de Supabase (versión 5)
 -- Texto, fotos, audios, edición, borrado, mensajes temporales, avisos y sala cerrada.
 -- Pégalo entero en Supabase → SQL Editor → Run.
 -- Se puede ejecutar varias veces sin perder mensajes.
@@ -186,6 +186,20 @@ begin
   return (select replace(encode(a.datos, 'base64'), E'\n', '') from adjuntos a where a.sala = p_sala and a.id = p_id);
 end $$;
 
+-- Lo mismo, pero en binario: la app lo pide con «Accept: application/octet-stream» y se ahorra el base64
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'application/octet-stream' and typnamespace = 'public'::regnamespace) then
+    create domain public."application/octet-stream" as bytea;
+  end if;
+end $$;
+create or replace function public.bajar_bin(p_sala text, p_id bigint, p_llave text default null)
+returns public."application/octet-stream"
+language plpgsql security definer set search_path = public as $$
+begin
+  perform comprobar_acceso(p_sala, p_llave);
+  return (select a.datos from adjuntos a where a.sala = p_sala and a.id = p_id);
+end $$;
+
 create or replace function public.editar(p_sala text, p_id bigint, p_datos text, p_llave text default null)
 returns void
 language plpgsql security definer set search_path = public as $$
@@ -371,7 +385,7 @@ declare f text;
 begin
   foreach f in array array[
     'leer(text, bigint, text)', 'enviar(text, text, integer, text)', 'subir(text, text, integer, text)',
-    'bajar(text, bigint, text)', 'editar(text, bigint, text, text)', 'borrar(text, bigint, bigint, text)',
+    'bajar(text, bigint, text)', 'bajar_bin(text, bigint, text)', 'editar(text, bigint, text, text)', 'borrar(text, bigint, bigint, text)',
     'vaciar(text, text)', 'suscribir(text, text, text, text, text, text)', 'desuscribir(text)',
     'escribir(text, text, boolean, text)', 'escribiendo(text, text, text)',
     'latido(text, text, text)', 'presencia_otro(text, text, text)',
