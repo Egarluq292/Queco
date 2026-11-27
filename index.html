@@ -1423,6 +1423,37 @@ async function reaccionar(objetivo, emoji) {
 
 /* «Eliminar para mí»: se oculta solo en este móvil; en el servidor y en el otro móvil sigue */
 const claveOcultos = () => 'susurro.ocultos.' + (sala || '').slice(0, 16);
+/* Hora de lectura de tus mensajes (solo en el móvil del administrador). Cada «visto» que llega marca como leídos,
+   a esa hora, los mensajes tuyos que aún no lo estaban. Lo anterior a tener esta función queda sin hora. */
+let leidos = { hasta: null, t: {} };
+const claveLeidos = () => 'susurro.leidos.' + (sala || '').slice(0, 16);
+function cargarLeidos() {
+  try { leidos = JSON.parse(localStorage.getItem(claveLeidos())) || { hasta: null, t: {} }; } catch { leidos = { hasta: null, t: {} }; }
+}
+function guardarLeidos() {
+  const ids = Object.keys(leidos.t).map(Number).sort((a, b) => b - a);
+  for (const id of ids.slice(1500)) delete leidos.t[id];
+  try { localStorage.setItem(claveLeidos(), JSON.stringify(leidos)); } catch {}
+}
+function anotarLectura(u, ts) {
+  if (!esAdmin() || !Number.isFinite(ts) || leidos.hasta === null) return; // sin registro aún: se empieza al acabar la primera carga
+  if (u <= leidos.hasta) return;
+  for (const [id, reg] of mensajes) if (id > leidos.hasta && id <= u && reg.m.d === disp && !leidos.t[id]) leidos.t[id] = ts;
+  leidos.hasta = u; guardarLeidos();
+}
+function cuandoFue(ts) {
+  const d = new Date(ts), hoy = new Date(), ayer = new Date(Date.now() - 864e5);
+  const mismo = (a, b) => a.toDateString() === b.toDateString();
+  const dia = mismo(d, hoy) ? 'hoy' : mismo(d, ayer) ? 'ayer' : 'el ' + d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  return `${dia} a las ${fmtHora(d)}`;
+}
+// Al tocar la hora o el ✓ de un mensaje propio: cuándo se envió y, solo para el administrador, cuándo se vio
+function infoEnvio(id) {
+  const reg = mensajes.get(id); if (!reg) return;
+  let txt = 'Enviado ' + cuandoFue(reg.m.ts);
+  if (adminActivo()) txt += id <= vistoHasta ? ' · Visto ' + (leidos.t[id] ? cuandoFue(leidos.t[id]) : '(sin hora registrada)') : ' · Aún no visto';
+  estado(txt, false, 5000);
+}
 let ocultos = new Set();
 const cargarOcultos = () => { try { ocultos = new Set(JSON.parse(localStorage.getItem(claveOcultos()) || '[]')); } catch { ocultos = new Set(); } };
 function ocultarParaMi(id) {
@@ -1589,12 +1620,12 @@ setInterval(caducarLocales, 15000);
 
 /* Avisos breves arriba: los errores se quedan hasta que se recupera la conexión */
 let relojAviso = null;
-function estado(txt, error = false) {
+function estado(txt, error = false, ms = 2200) {
   const e = $('#aviso');
   clearTimeout(relojAviso);
   if (txt === 'Sincronizado') { if (e.classList.contains('error')) e.classList.add('oculto'); return; }
   e.textContent = txt; e.classList.toggle('error', error); e.classList.remove('oculto');
-  if (!error) relojAviso = setTimeout(() => e.classList.add('oculto'), 2200);
+  if (!error) relojAviso = setTimeout(() => e.classList.add('oculto'), ms);
 }
 
 async function leer() {
@@ -1624,7 +1655,7 @@ async function leer() {
           if (m && m.k === 'visto') {
             if (Number.isInteger(m.u)) {
               if (m.d === disp) { if (m.u >= miVisto.u) miVisto = { id: f.id, u: m.u }; }
-              else if (m.u > vistoHasta) { vistoHasta = m.u; cambios = true; }
+              else if (m.u > vistoHasta) { anotarLectura(m.u, m.ts); vistoHasta = m.u; cambios = true; }
             }
             continue;
           }
@@ -1672,6 +1703,7 @@ async function leer() {
     estado('Sincronizado');
   } catch { estado('Sin conexión con el servidor', true); }
   if (listaChat.classList.contains('preparando')) revelarLista(1500);
+  if (esAdmin() && leidos.hasta === null && sala) { leidos.hasta = vistoHasta; guardarLeidos(); } // lo ya visto antes queda sin hora
   leyendo = false;
   informarVisto();
   comprobarEscribiendo();
@@ -3840,7 +3872,8 @@ function puedeEditar(id) {
       } else estado('Ese mensaje ya no existe');
       return;
     }
-    if (e.target.closest('.hora .check') && !adminActivo()) { estado('Enviado correctamente'); return; }
+    const horaPropia = e.target.closest('.msj.mio .hora');
+    if (horaPropia && !seleccion) { infoEnvio(Number(horaPropia.closest('.msj').dataset.id)); return; }
     const pildora = e.target.closest('.reac');
     if (pildora) { menuMensaje(Number(pildora.closest('.msj').dataset.id)); return; }
     const oculta = e.target.closest('.msj.con-oculta');
@@ -3862,7 +3895,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.7';
+const VERSION = '7.8';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
@@ -4395,7 +4428,7 @@ async function entrarCon(crudo, salaId, nombre) {
   vistoHasta = 0; miVisto = { id: 0, u: 0 };
   crudoActual = crudo;
   clave = await importarClave(crudo); sala = salaId; yo = nombre;
-  cargarOcultos();
+  cargarOcultos(); cargarLeidos();
   ultimaVersion = 0; temporal = 0; temporalId = 0;
   $('#lista').replaceChildren($('#vacio')); $('#vacio').classList.remove('oculto');
   $('#entrada').classList.add('oculto'); $('#chat').classList.remove('oculto');
@@ -4631,6 +4664,7 @@ function mostrarPortada() {
    Tras una actualización, al entrar al chat se enseña lo nuevo una sola vez.
    Solo cosas que ven los dos: lo que es solo del administrador no se anuncia. */
 const NOVEDADES = [
+  ['7.8', ['Toca la hora o el ✓ de un mensaje tuyo para ver cuándo se envió.']],
   ['7.6', ['La conversación y las fotos se abren mucho más rápido: el móvil guarda una copia cifrada y solo descarga lo nuevo.']],
   ['7.3', ['Ajustes → Sala → «Sala cerrada»: si se activa, solo pueden entrar vuestros dos móviles. Uno nuevo, aunque sepa el código de acceso, tiene que pedir permiso, y en el otro móvil aparece un aviso para permitirlo o rechazarlo.',
            'Si borras los datos del navegador con la sala cerrada, tu móvil contará como nuevo y tendrá que darte permiso el otro.']],
