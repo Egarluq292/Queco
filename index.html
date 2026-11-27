@@ -1448,8 +1448,10 @@ function cuandoFue(ts) {
   return `${dia} a las ${fmtHora(d)}`;
 }
 // Al tocar la hora o el ✓ de un mensaje propio: cuándo se envió y, solo para el administrador, cuándo llegó y cuándo se vio
+let infoEnvioActual = 0;
 async function infoEnvio(id) {
   const reg = mensajes.get(id); if (!reg) return;
+  const turno = ++infoEnvioActual; // si se toca otro mensaje mientras se consulta, gana el último
   const enviado = 'Enviado ' + cuandoFue(reg.m.ts);
   if (!adminActivo()) { estado(enviado, false, 5000); return; }
   const visto = id <= vistoHasta ? ' · Visto ' + (leidos.t[id] ? cuandoFue(leidos.t[id]) : '(sin hora registrada)') : ' · Aún no visto';
@@ -1459,7 +1461,7 @@ async function infoEnvio(id) {
     const t = await rpc('primera_entrega', { p_sala: sala, p_disp: disp, p_desde: new Date(reg.m.ts - 2000).toISOString() });
     let recibido = t ? ' · Recibido ' + cuandoFue(Date.parse(t)) : id <= vistoHasta ? '' : ' · Aún no recibido';
     if (t && leidos.t[id] && Date.parse(t) > leidos.t[id]) recibido = ''; // lo vio antes de que llegara un aviso
-    estado(enviado + recibido + visto, false, 6000);
+    if (turno === infoEnvioActual) estado(enviado + recibido + visto, false, 6000);
   } catch {}
 }
 /* «Recibido» (lo ve solo el administrador): el móvil del colega apunta en el servidor la hora a la que le llega
@@ -1650,8 +1652,9 @@ setInterval(caducarLocales, 15000);
 let relojAviso = null;
 function estado(txt, error = false, ms = 2200) {
   const e = $('#aviso');
-  clearTimeout(relojAviso);
+  // «Sincronizado» (cada consulta) solo quita un aviso de error: no debe tocar el reloj de los demás avisos
   if (txt === 'Sincronizado') { if (e.classList.contains('error')) e.classList.add('oculto'); return; }
+  clearTimeout(relojAviso);
   e.textContent = txt; e.classList.toggle('error', error); e.classList.remove('oculto');
   if (!error) relojAviso = setTimeout(() => e.classList.add('oculto'), ms);
 }
@@ -3925,7 +3928,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '7.9';
+const VERSION = '8.0';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
