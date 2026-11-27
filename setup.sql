@@ -1,4 +1,4 @@
--- Preferencias · configuración de Supabase (versión 5)
+-- Preferencias · configuración de Supabase (versión 6)
 -- Texto, fotos, audios, edición, borrado, mensajes temporales, avisos y sala cerrada.
 -- Pégalo entero en Supabase → SQL Editor → Run.
 -- Se puede ejecutar varias veces sin perder mensajes.
@@ -92,6 +92,16 @@ revoke all on public.dispositivos from anon, authenticated;
 -- El servicio de avisos (Edge Function) usa el rol interno service_role
 grant select, insert, update, delete on public.suscripciones to service_role;
 grant select, insert, update, delete on public.configuracion to service_role;
+
+-- ===== Entregas: a qué hora le llegó al otro móvil un aviso (o abrió la app). Sin contenido; se guardan 30 días =====
+create table if not exists public.entregas (
+  sala text not null,
+  disp text not null,
+  t    timestamptz not null default now()
+);
+create index if not exists entregas_sala_t on public.entregas (sala, t);
+alter table public.entregas enable row level security;
+revoke all on public.entregas from anon, authenticated;
 
 -- ===== Funciones (se borran las versiones antiguas) =====
 drop function if exists public.leer(text, bigint);
@@ -295,6 +305,29 @@ begin
     from presencia p where p.sala = p_sala and p.disp <> p_disp;
 end $$;
 
+-- Apuntar que a este móvil le ha llegado algo (lo llama el aviso aunque la app esté cerrada)
+create or replace function public.marcar_entrega(p_sala text, p_disp text, p_llave text default null)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform comprobar_acceso(p_sala, p_llave);
+  if length(p_sala) <> 64 or length(p_disp) > 64 then raise exception 'petición no válida'; end if;
+  -- como mucho una marca cada 3 segundos por móvil
+  if not exists (select 1 from entregas where sala = p_sala and disp = p_disp and t > now() - interval '3 seconds') then
+    insert into entregas (sala, disp) values (p_sala, p_disp);
+  end if;
+  delete from entregas where sala = p_sala and t < now() - interval '30 days';
+end $$;
+
+-- Primera vez que al otro móvil le llegó algo a partir de un momento dado
+create or replace function public.primera_entrega(p_sala text, p_disp text, p_desde timestamptz, p_llave text default null)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+begin
+  perform comprobar_acceso(p_sala, p_llave);
+  return (select min(t) from entregas where sala = p_sala and disp <> p_disp and t >= p_desde);
+end $$;
+
 -- ===== Sala cerrada: presentarse, ver móviles, cerrar/abrir, admitir/quitar =====
 -- Cada móvil se presenta al entrar. Con la sala abierta queda admitido; cerrada, queda pendiente
 -- hasta que un móvil admitido lo permita.
@@ -390,7 +423,8 @@ begin
     'escribir(text, text, boolean, text)', 'escribiendo(text, text, text)',
     'latido(text, text, text)', 'presencia_otro(text, text, text)',
     'presentarse(text, text, text)', 'moviles(text, text)', 'cerrar_sala(text, text, boolean)',
-    'decidir_movil(text, text, text, boolean)'
+    'decidir_movil(text, text, text, boolean)',
+    'marcar_entrega(text, text, text)', 'primera_entrega(text, text, timestamptz, text)'
   ] loop
     execute format('revoke execute on function public.%s from public', f);
     execute format('grant execute on function public.%s to anon', f);
