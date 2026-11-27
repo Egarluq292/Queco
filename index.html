@@ -1098,6 +1098,9 @@ function cabeceras() {
   return h;
 }
 let sinLlaves = false; // el setup.sql aún es el antiguo: las funciones no admiten p_llave
+// Funciones que existen desde antes de la sala cerrada: solo un 404 en ellas significa «setup.sql antiguo».
+// En las nuevas (marcar_entrega, primera_entrega…), un 404 solo significa que esa función aún no está.
+const FUNCIONES_BASE = new Set(['leer', 'enviar', 'subir', 'bajar', 'editar', 'borrar', 'vaciar', 'suscribir', 'escribir', 'escribiendo', 'latido', 'presencia_otro']);
 async function rpc(fn, cuerpo) {
   const conLlave = !sinLlaves && fn !== 'desuscribir' && !('p_llave' in cuerpo);
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -1106,7 +1109,7 @@ async function rpc(fn, cuerpo) {
   });
   if (!r.ok) {
     let t = ''; try { t = await r.text(); } catch {}
-    if (conLlave && r.status === 404 && /PGRST202|Could not find/i.test(t)) { sinLlaves = true; return rpc(fn, cuerpo); }
+    if (conLlave && FUNCIONES_BASE.has(fn) && r.status === 404 && /PGRST202|Could not find/i.test(t)) { sinLlaves = true; return rpc(fn, cuerpo); }
     if (/sala cerrada/.test(t)) { sinAccesoASala(); throw new Error(fn + ' sala cerrada'); }
     throw new Error(fn + ' ' + r.status);
   }
@@ -3928,7 +3931,7 @@ function puedeEditar(id) {
 function marcarSegmento(sel, v) {
   for (const b of document.querySelectorAll(sel + ' button')) b.classList.toggle('activo', b.dataset.v === v);
 }
-const VERSION = '8.0';
+const VERSION = '8.1';
 function modoPantalla() {
   for (const [m, t] of [['fullscreen', 'pantalla completa'], ['standalone', 'app en ventana'], ['minimal-ui', 'ventana mínima']])
     if (matchMedia(`(display-mode: ${m})`).matches) return t;
